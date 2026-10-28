@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16384f"/><stop offset="1" stop-color="#0a1823"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#g)"/><g transform="translate(256 262) scale(0.92) translate(-256 -262)"><polygon points="106,345 256,420 256,446 106,371" fill="#245f8a"/>
+<polygon points="256,420 406,345 406,371 256,446" fill="#1b4a6e"/>
+<polygon points="256,270 406,345 256,420 106,345" fill="#3f94d1"/><polygon points="106,270 256,345 256,371 106,296" fill="#2f78ab"/>
+<polygon points="256,345 406,270 406,296 256,371" fill="#235d86"/>
+<polygon points="256,195 406,270 256,345 106,270" fill="#5db3ee"/><polygon points="106,195 256,270 256,296 106,221" fill="#c98a14"/>
+<polygon points="256,270 406,195 406,221 256,296" fill="#a56f0c"/>
+<polygon points="256,120 406,195 256,270 106,195" fill="#f5b83a"/><ellipse cx="256" cy="195" rx="52" ry="26" fill="none" stroke="#fff" stroke-width="7"/><path d="M236 186 v18 M276 186 v18 M236 195 h40" stroke="#fff" stroke-width="7" stroke-linecap="round" fill="none"/><path d="M256 120 V88" stroke="#fff" stroke-width="6" stroke-linecap="round"/><path d="M256 100 l-8 8 M256 100 l8 8" stroke="#fff" stroke-width="6" stroke-linecap="round" fill="none"/><text x="256" y="76" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="700" font-size="34" fill="#fff">N</text></g></svg>

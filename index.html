@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dolwin 4 Visor 3D</title>
+<meta name="description" content="Visor 3D de las cubiertas de la plataforma HVDC Dolwin 4 (niveles 0 a 11): áreas, rooms, paredes, puertas y planos PDF.">
+<meta name="theme-color" content="#0f2433">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dolwin 4">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+
+<style>
+/* Layout: pantalla completa con escena 3D; panel de niveles/areas a la izquierda, ficha del area a la derecha, HUD al caminar */
+:root{
+  --bg:#e9edf1; --panel:#f8fafb; --ink:#10202c; --mut:#566876; --line:#c9d3db; --accent:#1769a6; --accent-ink:#ffffff;
+  --scene:#dfe6ec; --grid:#b9c6d1; --edge:#233645; --chip:#e1e8ee;
+  --f-disp:'Barlow Condensed','Arial Narrow',sans-serif; --f-body:'IBM Plex Sans',system-ui,sans-serif; --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0a1219; --panel:#111c26; --ink:#e4edf4; --mut:#8ea3b4; --line:#233443; --accent:#5db3ee; --accent-ink:#06121b;
+  --scene:#0d1822; --grid:#1d2f3d; --edge:#bcd4e6; --chip:#1a2a37; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0a1219; --panel:#111c26; --ink:#e4edf4; --mut:#8ea3b4; --line:#233443; --accent:#5db3ee; --accent-ink:#06121b;
+  --scene:#0d1822; --grid:#1d2f3d; --edge:#bcd4e6; --chip:#1a2a37; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px}
+*{box-sizing:border-box}
+#app{height:100%;display:flex;flex-direction:column;gap:10px;min-width:0}
+header{display:flex;align-items:center;gap:12px 14px;flex-wrap:wrap;min-width:0}
+h1{font-family:var(--f-disp);font-weight:700;font-size:26px;letter-spacing:.02em;margin:0;line-height:1;text-wrap:balance}
+h1 small{display:block;font-family:var(--f-mono);font-weight:400;font-size:10.5px;letter-spacing:.06em;color:var(--mut);margin-top:4px;text-transform:uppercase}
+.ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);margin-left:auto}
+.ctl input{accent-color:var(--accent);width:90px}
+.tgs{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-left:auto}
+.tgs label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.tgs input{accent-color:var(--accent)}
+.tgs select{font:inherit;font-size:12px;background:var(--chip);color:inherit;border:1px solid var(--line);border-radius:4px;padding:2px 4px}
+#toast{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 12px;font-size:12px;color:var(--ink);opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center;z-index:5}
+.hb{font:inherit;font-size:12px;background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:6px 10px;cursor:pointer;touch-action:manipulation}
+.hb:hover{background:var(--line)}
+body.pcol #panel{display:none}
+@media (hover:none),(pointer:coarse){.chip,.row .go,.hb{min-height:34px}.tgs label{min-height:30px}.srch{min-height:38px;font-size:14px}}
+@media (min-width:901px) and (max-width:1200px){
+  #panel{width:230px} #info{width:250px} h1{font-size:22px} h1 small{font-size:9.5px}
+  .tgs{gap:8px 10px}
+}
+#compass{position:absolute;right:10px;bottom:10px;width:64px;height:64px;pointer-events:none}
+body.walk #compass{display:none}
+.tgs i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.ctl{margin-left:0}
+#app header .ctl{margin-left:0}
+#stage{position:relative;flex:1;min-height:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--scene)}
+canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+.card{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:6px;min-width:0}
+#panel{left:10px;top:10px;bottom:10px;width:270px;display:flex;flex-direction:column;overflow:hidden}
+#panel .hd{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+.lab{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:6px}
+#levels{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:4px;padding:4px 7px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip:focus-visible,button:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#list{overflow:auto;flex:1;padding:4px 6px 8px}
+.row{display:flex;align-items:center;gap:8px;padding:6px 6px;border-radius:4px;cursor:pointer;min-width:0}
+.srch{width:100%;margin-bottom:8px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--chip);color:inherit;font:inherit;font-size:12px}
+.srch:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.cr{font-family:var(--f-mono);font-size:9px;border:1px solid var(--line);border-radius:3px;padding:0 3px;margin-left:5px;color:var(--mut)}
+.row:hover{background:var(--chip)}
+.row.dis{cursor:default;opacity:.65}
+.row.sel{background:var(--chip);box-shadow:inset 2px 0 0 var(--accent)}
+.sw{width:12px;height:12px;border-radius:2px;flex:none;border:1px solid rgba(0,0,0,.25)}
+.row .t{flex:1;min-width:0}
+.row b{font-family:var(--f-mono);font-weight:500;font-size:12px}
+.row span.n{display:block;font-size:12px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.go{font-size:11px;border:1px solid var(--line);background:transparent;color:var(--accent);border-radius:4px;padding:3px 7px;cursor:pointer;font-family:var(--f-body)}
+.go:hover{background:var(--accent);color:var(--accent-ink)}
+#info{right:10px;top:10px;width:290px;max-height:calc(100% - 20px);overflow:auto;padding:12px 14px}
+#info h2{font-family:var(--f-disp);font-size:24px;font-weight:700;margin:2px 0 2px;line-height:1.05;text-wrap:balance}
+#info .meta{font-family:var(--f-mono);font-size:11px;color:var(--mut);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+#info ul{margin:6px 0 10px;padding-left:16px;font-size:12.5px;line-height:1.45}
+#info li{margin-bottom:2px}
+.btn{width:100%;border:0;background:var(--accent);color:var(--accent-ink);font-family:var(--f-disp);font-size:17px;font-weight:600;letter-spacing:.04em;padding:9px 12px;border-radius:5px;cursor:pointer;text-transform:uppercase}
+.btn:hover{filter:brightness(1.1)}
+.btn.sec{background:var(--chip);color:var(--ink);border:1px solid var(--line)}
+#hud{left:50%;transform:translateX(-50%);top:10px;padding:8px 14px;text-align:center;max-width:calc(100% - 20px);display:none}
+#hud b{font-family:var(--f-disp);font-size:20px;letter-spacing:.02em}
+#hud .s{font-family:var(--f-mono);font-size:11px;color:var(--mut)}
+#walkbar{left:10px;right:268px;bottom:10px;padding:8px 10px;display:none;gap:10px;align-items:center;flex-wrap:wrap}
+#walkbar .nb{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;flex:1 1 200px;min-width:0;padding-bottom:2px}
+#walkbar .chip{flex:none;white-space:nowrap}
+#mini{right:10px;bottom:10px;padding:6px;display:none}
+#mini canvas{width:240px;height:165px}
+#pad{display:none;position:absolute;left:12px;bottom:70px;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px);gap:4px}
+#pad button{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;font-size:18px;cursor:pointer;touch-action:none}
+#tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);padding:3px 8px;border-radius:4px;font-family:var(--f-mono);font-size:11px;display:none;white-space:nowrap}
+#help{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);font-size:11.5px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 12px;white-space:nowrap;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis}
+body.walk #panel,body.walk #info,body.walk #help{display:none}
+body.walk #hud{display:block}
+body.walk #walkbar{display:flex}
+body.walk #mini{display:block}
+body.walk #pad{display:grid}
+body.walk .ctl{display:none}
+@media (max-width:900px){
+  header{gap:6px 10px} h1{flex:1 1 auto;min-width:0} h1 small{display:none}
+  .tgs{flex-wrap:nowrap;overflow-x:auto;width:100%;margin-left:0;padding-bottom:2px} .tgs label{white-space:nowrap;flex:none} .ctl{display:none}
+  #panel{top:auto;left:8px;right:8px;width:auto;height:36%;bottom:8px}
+  #info{top:8px;right:8px;left:8px;width:auto;max-height:42%}
+  #help{display:none}
+  #compass{bottom:auto;top:auto;right:8px;bottom:calc(36% + 16px);width:52px;height:52px}
+  #mini canvas{width:150px;height:103px}
+  #walkbar{right:10px}
+  #walkbar .nb{flex:1 1 100%}
+  #mini{bottom:126px}
+  #pad{bottom:126px}
+  h1{font-size:22px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Dolwin 4 · Cubiertas<small>HVDC 900 MW ±320 kV DC / 66 kV AC · Plano DW41-OS-TOPS-LY-410006 · Rev03 17/06/2025</small></h1>
+    <button id="ptog" class="hb" type="button" aria-label="Mostrar u ocultar panel">☰ Panel</button><button id="fs" class="hb" type="button" aria-label="Pantalla completa">⛶</button>
+    <div class="tgs"><label><input type="checkbox" id="tg"><i style="background:#233645"></i>Planos PDF</label><label><input type="checkbox" id="tjk"><i style="background:#2a9d8f"></i>Jacket y cotas</label><label>Nombres <select id="tn" aria-label="Mostrar nombres"><option value="">No</option><option value="a">Área</option><option value="r">Room</option></select></label><label><input type="checkbox" id="tw"><i style="background:#8a97a3"></i>Paredes</label><label><input type="checkbox" id="td" checked><i style="background:#e0892b"></i>Puertas</label><label><input type="checkbox" id="tl" checked><i style="background:#3f8fb5"></i>Persianas</label></div>
+    <label class="ctl" for="ex">Separar niveles <input id="ex" type="range" min="0" max="14" step="0.5" value="0"></label>
+  </header>
+  <div id="stage">
+    <canvas id="cv" tabindex="0" aria-label="Modelo 3D de la plataforma"></canvas>
+    <div id="panel" class="card">
+      <div class="hd">
+        <input id="q" class="srch" type="search" placeholder="Buscar área (1.08) o room (CLSL01)…" aria-label="Buscar por área o room" autocomplete="off">
+        <div class="lab">Clean Room</div>
+        <div id="crf" style="display:flex;gap:4px;margin-bottom:8px"><button class="chip on" data-m="0">Todas</button><button class="chip" data-m="1">Solo CR</button><button class="chip" data-m="2">No CR</button></div>
+        <div class="lab">Corrosión (ISO 12944)</div>
+        <div id="cxf" style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap"><button class="chip on" data-m="0">Todas</button><button class="chip" data-m="4" title="Colorear todas las áreas por categoría">Mapa</button><button class="chip" data-m="1" style="border-left:4px solid #3b8fd6">C3</button><button class="chip" data-m="2" style="border-left:4px solid #e0642b">CX</button><button class="chip" data-m="3" style="border-left:4px solid #9b59b6" title="Áreas con rooms C3 y CX">Mixto</button></div>
+        <div class="lab">Niveles de cubierta</div>
+        <div id="levels"></div>
+      </div>
+      <div class="hd" style="border-bottom:0;padding-bottom:2px"><div class="lab" id="lvltitle">Áreas</div></div>
+      <div id="list"></div>
+    </div>
+    <div id="info" class="card" hidden></div>
+    <svg id="compass" viewBox="-32 -32 64 64" aria-label="Norte"><circle r="29" fill="var(--chip)" stroke="var(--line)" stroke-width="1.5" opacity=".92"/><g id="cneedle"><path d="M0 -24 L6 2 L0 -3 L-6 2Z" fill="#d6452b"/><path d="M0 24 L6 2 L0 -3 L-6 2Z" fill="var(--mut)" opacity=".55"/></g><text x="0" y="-16" font-family="IBM Plex Mono,monospace" font-size="10" font-weight="700" text-anchor="middle" fill="var(--ink,currentColor)">N</text></svg>
+    <div id="hud" class="card"><b id="hudname"></b><div class="s" id="hudsub"></div></div>
+    <div id="walkbar" class="card">
+      <div class="nb" id="nb"></div>
+      <button class="chip" id="up">↑ Subir nivel</button>
+      <button class="chip" id="down">↓ Bajar nivel</button>
+      <button class="chip on" id="exit">Salir</button>
+    </div>
+    <div id="mini" class="card"><canvas id="mc" width="480" height="330"></canvas></div>
+    <div id="pad">
+      <span></span><button data-k="KeyW" aria-label="Avanzar">▲</button><span></span>
+      <button data-k="KeyA" aria-label="Izquierda">◀</button><button data-k="KeyS" aria-label="Retroceder">▼</button><button data-k="KeyD" aria-label="Derecha">▶</button>
+    </div>
+    <div id="tip"></div>
+    <div id="toast" role="status"></div>
+    <div id="help">Arrastra para girar · rueda para zoom · clic derecho para desplazar · clic en un área para seleccionarla</div>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+/* ---------- Datos tomados de los planos (px del plano -> metros) ---------- */
+var SX=0.1145, SZ=0.115, X0=280, Z0=610; // eje A = x 0, eje 1 = z 0, norte = -z
+function mx(p){return (p-X0)*SX} function mz(p){return (p-Z0)*SZ}
+function rectM(r){return [mx(r[0]),mz(r[1]),mx(r[2]),mz(r[3])]}
+var LEVELS=[
+ {n:0,elev:21.55,h:2.65,note:'EL. +21.550 (T.O.P.)'},
+ {n:1,elev:24.2,h:4.0,note:'EL. +24.200 (B.O.P.)'},
+ {n:2,elev:28.2,h:4.1,note:'EL. +28.200 (B.O.P.)'},
+ {n:3,elev:32.3,h:3.73,note:'EL. +32.300 (B.O.P.)'},
+ {n:4,elev:36.03,h:3.77,note:'EL. +36.030 (B.O.P.)'},
+ {n:5,elev:39.8,h:4.6,note:'EL. +39.800 (B.O.P.)'},
+ {n:6,elev:44.4,h:4.42,note:'EL. +44.400 (B.O.P.)'},
+ {n:7,elev:48.82,h:3.43,note:'EL. +48.820 (B.O.P.)'},
+ {n:8,elev:52.25,h:3.8,note:'EL. +52.250 (B.O.P.)'},
+ {n:9,elev:56.05,h:4.08,note:'EL. +56.050 (B.O.P.)'},
+ {n:10,elev:60.13,h:4.0,note:'EL. +60.130 (B.O.P.)'},
+ {n:11,elev:63.39,h:3.0,note:'Plataformas elevadas · HPFS +63.40 / +63.59'}
+];
+var AREAS=[];
+function A(l,id,name,c,r,rooms,p,o){AREAS.push(Object.assign({l:l,id:id,name:name,c:c,r:(typeof r[0]==='number')?[r]:r,rooms:rooms||[],p:p||null},o||{}))}
+function V(l,id,name,r){A(l,id,name,'#6fa8dc',r,[],null,{v:true})}
+var PURP='#b36fd0',LG='#c9ec8d',ORG='#f5a94f',TEAL='#3b9aa0',RED='#e8554e';
+function shafts(l,ids,noE,low){
+  var nw=low?[168,200,232,235]:[168,230,262,265], s=low?[295,600,405,660]:[295,655,405,698], t=low?[345,598,390,625]:[345,630,390,658];
+  A(l,ids[0],'Núcleo de escaleras noroeste',RED,nw,['Escalera y acceso entre niveles (Lev 00-05 / 06-10)','Esclusa (airlock)','Hueco de escalera hacia nivel inferior']);
+  if(!noE)A(l,ids[1],'Núcleo de escaleras este',RED,[805,265,862,410],['Escalera (D0xS03)','Troncal de servicio (D0xT03)','Esclusa']);
+  A(l,ids[2],'Núcleo de escaleras sur',RED,s,['Esclusa (airlock)','Escalera (D0xS02)','Pasillo (D0xC02)']);
+  A(l,ids[3],'Tronco del ascensor',PURP,t,['Ascensor (D0xE01)','Recorre todos los niveles'],null,{tr:true});
+}
+/* Nivel 0 */
+A(0,'0.02','Sala de bombas oeste','#4fc3d0',[168,265,455,655],['D00A01 Esclusa (airlock)','D00C01 / D00C02 Acceso desde/hacia nivel 1','D00E01 Ascensor (foso)','D00R04 / D00R05 Bombas elevadoras de agua de mar','Escaleras desde/hacia nivel 1 (EL. +24.200)','Entradas de aire con persiana (AHU)'],'pump');
+A(0,'0.03','Zona central J-tubes','#f2b134',[455,265,610,655],['J-tubes (entrada de cables)','Escalera hacia/desde nivel 1','Acceso a Top of Jacket'],null);
+A(0,'0.04','Zona este · doble fondo','#b9a3d8',[610,265,830,640],['D00R01 Doble fondo','D00S03 Escalera','D00T03 Troncal de servicio (nota 7)','Escotilla de emergencia','Entradas de aire con persiana','HPFS EL. +21.797'],null);
+A(0,'0.05','Escalera a Top of Jacket',RED,[365,236,455,265],['Escalera desde/hacia Top of Jacket / nivel 1','HPFS EL. +21.840'],null);
+A(0,'0.01','Tronco del ascensor',PURP,[345,630,388,662],['D00E01 Ascensor (foso)'],null,{tr:true});
+/* Nivel 1 */
+A(1,'1.01','Climatización y servicios','#f2e34a',[168,335,280,610],['D01R05 HVAC / AHU','D01R06 Stranded','D01R07 Stranded toilet','D01R08 Hipoclorito','Zona de laydown y entrada de aire'],'ahu');
+A(1,'1.02','Clean Room · Converter Cooling Room','#f2807a',[280,313,455,610],['Equipos de refrigeración de convertidores','Bombas y FCU','Puertas correderas'],'cab');
+A(1,'1.03','Pasillo de convertidores','#b8b3d9',[455,313,497,610],['Pasillo técnico','Puertas correderas'],null);
+A(1,'1.04','Clean Room · Converter Reactor Room 1','#86c0f0',[497,313,830,610],['Convertidores','Reactores','Pararrayos (surge arresters)','D01R03 HVDC 1','DC GIS','Escotilla vertical para intercambio de equipos (nota 8)'],'conv');
+A(1,'1.05','Zona laydown noroeste','#b5b27a',[168,265,390,313],['Zona de laydown','Escalera hacia/desde nivel 0','Escape chute'],null);
+A(1,'1.06','Cables HVAC / HVDC','#f5a94f',[390,265,655,313],['D01T05 Empalme de cables HVAC','D01T07 Tiro de cables HVDC','Parking de la plataforma elevadora (scissor lift)','J-tubes'],null);
+A(1,'1.07','Sala de tiro este','#c9ec8d',[655,265,830,313],['D01T07 Tiro de cables HVDC','DC GIS','Escotilla'],null);
+A(1,'1.08','Zona exterior norte','#1f4fa8',[235,205,870,265],['Zona laydown','Muster area','Balsa salvavidas','Escape chute','Aterrizaje W2W y puente jack-up','Escotilla de servicio','Esclusas D01A05 / D01A06'],null);
+A(1,'1.09','Núcleo este',RED,[830,270,872,392],['D01S03 Escalera','D01T03 Troncal de servicio','D01A06 Esclusa'],null);
+A(1,'1.10','Voladizo sur','#1d6b2a',[595,612,725,660],['Voladizo con plancha','Escotilla vertical (nota 8)'],null);
+A(1,'1.11','Empalme de cables sur','#f7a8e3',[385,612,595,660],['D01T06 Empalme de cables HVAC','J-tubes'],null);
+A(1,'1.12','Acceso sur','#5fa8a8',[168,612,385,660],['Acceso desde/hacia nivel 0','Esclusa D01A02','Puerta corredera'],null);
+A(1,'1.13','Muster area sur','#6b6a1a',[112,660,290,702],['Aterrizaje W2W','Muster area','D01C02 Acceso desde/hacia nivel 0'],null);
+A(1,'1.14','Núcleo sur y ascensor',RED,[345,660,412,715],['D01E01 Ascensor','D01R01 Chillers y bombeo','D01R04 Sistemas de agua de refrigeración','Bombas de agua de mar'],null,{tr:true});
+A(1,'1.15','Núcleo noroeste',RED,[168,228,235,265],['D01S01 Escalera','D01A01 Esclusa','Hueco hacia nivel 0'],null);
+/* Nivel 2 */
+A(2,'2.01','HVAC y CWC UPS+C&P','#dcdcdc',[168,313,280,610],['D02R02 HVAC (AHU)','D02R03 CWC UPS+C&P','Skid de ventiladores','Entradas de aire'],'ahu');
+A(2,'2.03','Sala de refrigeración (CWC)','#b9b86a',[280,313,455,610],['Puente grúa','FCU','D02R04 Sistemas de agua de refrigeración'],'cab');
+A(2,'2.02','CWC UPS + C&P','#5aa86a',[280,390,322,530],['Cuadros UPS y control y protección'],null);
+A(2,'2.04','Troncal de servicio noroeste',PURP,[168,265,232,313],['D02T01 Troncal de servicio (nota 7)'],null);
+A(2,'2.05','Cables HVAC norte',LG,[232,265,405,313],['D02T05 Empalme de cables HVAC','Escotilla y laydown','Suministro HVAC a salas de cables'],null);
+A(2,'2.06','Tiro de cables',ORG,[405,265,690,313],['D02T07 Tiro de cables HVDC','Tubo guía de cable nivel 2→8','J-tube'],null);
+A(2,'2.07','DC-GIS terminal',LG,[690,265,805,313],['D02R01 Terminal DC-GIS punto de conexión 1','D02C03 Pasillo','Suministro HVAC reactor'],null);
+A(2,'2.08','Empalme sur','#f9b79a',[385,612,620,655],['D02T06 Empalme de cables HVAC','LCU'],null);
+A(2,'2.09','Pasillo sur',TEAL,[232,612,385,655],['D02C02 Pasillo','D02A02 Esclusa'],null);
+A(2,'2.10','Troncal de servicio suroeste',PURP,[168,612,232,660],['D02T04 Troncal de servicio (nota 7)'],null);
+shafts(2,['1.15','1.09','1.14','0.01']);
+/* Nivel 3 */
+A(3,'3.01','Clean Room · GIS Control Room','#5db96a',[195,313,280,610],['D03R03 GIS C&P 66 kV','D03T09 Troncal de servicio (nota 8)','D03R04 Alumbrado de emergencia'],'cab');
+A(3,'3.10','Pasillo oeste','#dcdcdc',[168,313,195,610],['D03C03 Pasillo','D03R05 Alumbrado de escape'],null);
+A(3,'3.02','Clean Room · GIS 66 kV','#f2807a',[280,313,455,610],['D03R02 GIS 66 kV','Zona de laydown','FCU'],'gis');
+A(3,'3.03','Troncal de servicio noroeste',PURP,[168,265,232,313],['D03T01 Troncal de servicio (nota 7)'],null);
+A(3,'3.04','Cables HVAC norte',LG,[232,265,405,313],['D03T05 Empalme de cables HVAC','Escotilla vertical de mantenimiento'],null);
+A(3,'3.05','Tiro de cables',ORG,[405,265,690,313],['D03T08 Tiro de cables HVDC','Tubo guía de cable','J-tube'],null);
+A(3,'3.06','Pasillo este',LG,[690,265,805,313],['D03C04 Pasillo','D03T02 Troncal de servicio'],null);
+A(3,'3.07','Empalme sur','#f7a8e3',[455,610,595,655],['D03T06 Empalme de cables HVAC'],null);
+A(3,'3.08','Pasillo sur',TEAL,[232,610,455,655],['D03C02 Pasillo','D03A02 Esclusa','D03E01 Ascensor'],null);
+A(3,'3.09','Troncal de servicio suroeste',PURP,[168,610,232,660],['D03T04 Troncal de servicio (nota 7)'],null);
+A(3,'3.11','Voladizo norte','#3ab0c8',[365,213,455,265],['Voladizo','Pendiente'],null);
+shafts(3,['1.15','1.09','1.14','0.01']);
+/* Nivel 4 */
+A(4,'4.01','Instrumentación y telecomunicaciones','#f2e34a',[168,313,280,610],['D04R02 / R03 / R04 Control auxiliar y telecom','D04C04 Pasillo','Instrumentación'],'cab');
+A(4,'4.02','HVAC HVDC','#6fd36f',[715,313,830,610],['D04R01 HVAC HVDC','LCU de convertidores y reactores 1','FCU'],'ahu');
+A(4,'4.03','Troncal de servicio noroeste',PURP,[168,265,232,313],['D04T01 Troncal de servicio (nota 7)'],null);
+A(4,'4.04','Cables HVAC norte',LG,[232,265,405,313],['D04C01 Pasillo','Escotilla y laydown'],null);
+A(4,'4.05','Tiro de cables',ORG,[405,265,690,313],['D04T05 Empalme HVAC','D04T07 Tiro HVDC','J-tube'],null);
+A(4,'4.06','Pasillo este','#d7f08a',[690,265,830,313],['D04C03 Pasillo','D04T02 Troncal de servicio'],null);
+A(4,'4.07','Voladizo','#1d6b2a',[595,612,740,645],['Escalera desde/hacia voladizo nivel 5','Entrada de aire con persiana'],null);
+A(4,'4.08','Empalme sur','#f7a8e3',[455,610,595,655],['D04T06 Empalme de cables HVAC'],null);
+A(4,'4.09','Pasillo sur',TEAL,[232,610,455,655],['D04C02 Pasillo','D04A02 Esclusa','D04E01 Ascensor','Plataforma externa EL. +38.325'],null);
+A(4,'4.10','Troncal de servicio suroeste',PURP,[168,610,232,660],['D04T04 Troncal de servicio (nota 7)'],null);
+shafts(4,['1.15','1.09','1.14','0.01']);
+/* Nivel 5 */
+A(5,'5.01','Bombas contra incendios y agua técnica','#86c0f0',[168,313,280,610],['D05R05 / D05R07 Bombas de agua contra incendios','D05R06 Suministro de agua técnica','D05T06 / D05T07 Troncales de servicio (nota 8)'],'pump');
+A(5,'5.03','Clean Room · Transformador B','#f0a060',[280,313,385,470],['D05R01 Transformador 2','Sump tank transformador 2'],'tx');
+A(5,'5.02','Clean Room · Transformador A','#d6d38a',[280,470,385,610],['D05R04 Transformador 1','Sump tank transformador 1'],'tx');
+A(5,'5.04','Clean Room · GIS 420 kV','#5a5af0',[385,313,455,610],['D05R02 GIS 420 kV'],'gis');
+A(5,'5.05','Clean Room · Converter Reactor Room 2','#f2a3ee',[455,313,830,610],['Convertidores','Reactores','Pararrayos','D05R03 HVDC 2','DC GIS'],'conv');
+A(5,'5.06','Troncal de servicio noroeste',PURP,[168,265,232,313],['D05T01 Troncal de servicio (nota 7)'],null);
+A(5,'5.07','Cables norte',LG,[232,265,455,313],['D05C01 Pasillo','Escotilla y laydown'],null);
+A(5,'5.08','Tiro de cables',ORG,[455,265,665,313],['D05T05 Tiro de cables HVDC','Tubo guía de cable','J-tube'],null);
+A(5,'5.09','Almacén HV',LG,[665,265,805,313],['D05R08 Almacén de repuestos HV','Parking de plataforma elevadora','D05C04 Pasillo'],null);
+A(5,'5.10','Voladizo','#1d6b2a',[455,612,600,655],['Voladizo','Escalera desde/hacia voladizo nivel 4','Escotilla vertical (nota 9)'],null);
+A(5,'5.11','Pasillo sur',TEAL,[232,612,455,655],['D05C02 / D05C03 Pasillo','D05A02 Esclusa','D05E01 Ascensor'],null);
+A(5,'5.12','Troncal de servicio suroeste',PURP,[168,612,232,660],['D05T04 Troncal de servicio (nota 7)'],null);
+shafts(5,['1.15','1.09','1.14','0.01']);
+/* Nivel 6 */
+A(6,'6.02','Sala UPS y cuadros BT','#7fdcec',[168,313,300,610],['D06R03 UPS y cuadros BT 2','D06R02 UPS y cuadros BT 1','FCU'],'cab');
+A(6,'6.03','Troncal de servicio noroeste',PURP,[168,265,232,313],['D06T01 Troncal de servicio (nota 7)'],null);
+A(6,'6.04','Cables norte',LG,[232,265,455,313],['D06C01 Pasillo','Escotilla y laydown','Transformador 2 (ref.)'],null);
+A(6,'6.05','Tiro de cables',ORG,[455,265,665,313],['D06T05 Tiro de cables HVDC','Sistema de tiro','Tubo guía de cable'],null);
+A(6,'6.06','Terminal DC-GIS',LG,[665,265,805,313],['D06R01 Terminal DC-GIS punto de conexión 2','D06C04 Pasillo'],null);
+A(6,'6.08','Pasillo sur',TEAL,[232,612,455,655],['D06C02 / D06C03 Pasillo','D06E01 Ascensor'],null);
+A(6,'6.10','Troncal de servicio suroeste',PURP,[168,612,232,660],['D06T04 Troncal de servicio (nota 7)'],null);
+shafts(6,['6.11','6.07','6.09','6.01']);
+/* Nivel 7 */
+A(7,'7.04','Sala UPS y baterías','#7fdcec',[168,313,300,610],['D07R05 UPS-Baterías 2','D07R02 UPS-Baterías 1','D07R06 / D07R07 Cabinas UPS','D07T06 / D07T07 Troncales (nota 8)'],'cab');
+A(7,'7.01','Zona auxiliar 7.01','#3d7be0',[168,410,260,445],['Transformador auxiliar (D07R04)','Sump tank aux. transformador'],null);
+A(7,'7.02','Zona auxiliar 7.02','#e8d23a',[168,455,260,490],['Transformador auxiliar (D07R03)'],null);
+A(7,'7.03','Clean Room · Control y protección','#8a8a8a',[385,313,455,610],['D07R01 C&P (control y protección)'],'cab');
+A(7,'7.05','Troncal de servicio noroeste',PURP,[168,265,232,313],['D07T01 Troncal de servicio (nota 7)'],null);
+A(7,'7.06','Cables norte',LG,[240,265,455,313],['D07C01 Pasillo','Escalera extraíble','Escotilla y laydown'],null);
+A(7,'7.07','Tiro de cables',ORG,[455,265,665,313],['D07T05 Tiro de cables HVDC','D07R09 Alumbrado de emergencia central'],null);
+A(7,'7.08','Pasillo este',LG,[665,265,805,313],['D07C04 Pasillo','D07T02 Troncal de servicio'],null);
+A(7,'7.09','Pasillo sur',TEAL,[232,612,455,655],['D07C02 Pasillo','D07R08 Alumbrado de escape central','D07E01 Ascensor'],null);
+A(7,'7.10','Troncal de servicio suroeste',PURP,[168,612,232,660],['D07T04 Troncal de servicio (nota 7)'],null);
+A(7,'7.11','Zona de mantenimiento oeste','#1d5a2a',[108,235,168,560],['Voladizo','Área de mantenimiento','Sump tanks transformadores auxiliares','Escotilla de emergencia'],null);
+shafts(7,['6.11','6.07','6.09','6.01']);
+/* Nivel 8 */
+A(8,'8.01','Combustible y limpieza de diésel','#6c6cf0',[168,313,280,610],['D08R05 / D08R07 Almacén de fuel oil','D08R06 Limpieza y bombeo de diésel','D08T06 / D08T07 Troncales (nota 8)','Sump tanks'],'tank');
+A(8,'8.02','Vestuarios y alojamiento','#86e0f0',[385,313,455,610],['D08R09 / D08R10 Taquillas hombres','D08R08 Taquillas mujeres','D08R11 / D08R12 Vestuarios','D08R13 Alojamiento de emergencia','D08R15 Aseo','Secador de trajes'],'cab');
+A(8,'8.03','HVAC HVDC','#6fd36f',[715,313,830,610],['D08R04 HVAC HVDC','LCU de convertidores y reactores','FCU'],'ahu');
+A(8,'8.04','Troncal de servicio noroeste',PURP,[168,265,232,313],['D08T01 Troncal de servicio (nota 7)'],null);
+A(8,'8.05','Reuniones y oficinas',LG,[232,265,455,313],['D08R01 Sala de reuniones','D08R14 Oficina','D08C01 / D08C05 Pasillos'],null);
+A(8,'8.06','Tiro de cables',ORG,[455,265,745,313],['D08T05 Tiro de cables HVDC','Tubo guía de cable'],null);
+A(8,'8.07','Clean Room · Control de plataforma','#d7f08a',[745,265,830,313],['D08R03 Sala de control de la plataforma','D08R02 Archivo de documentos'],'cab');
+A(8,'8.08','Voladizo','#1d6b2a',[665,615,725,645],['Voladizo','D08A03 Esclusa'],null);
+A(8,'8.09','Pasillo sur',TEAL,[232,612,455,655],['D08C02 / D08C03 / D08C06 Pasillos','D08E01 Ascensor','Secador de trajes'],null);
+A(8,'8.10','Troncal de servicio suroeste',PURP,[168,612,232,660],['D08T04 Troncal de servicio (nota 7)'],null);
+shafts(8,['6.11','6.07','6.09','6.01']);
+/* Nivel 9 */
+A(9,'9.05','Cubierta de generadores y grúa','#f5c040',[295,262,740,562],['Generadores diésel portátiles','Tanques de combustible temporales','Contenedores temporales','Sump tanks','Plataforma de cabrestante','Zona de laydown','Escotillas','Radio máx. de grúa 52 m'],'tank');
+A(9,'9.06','Helipuerto y servicios','#86e0f0',[740,262,860,610],['D09R01 / R02 / R03 Oficina y descanso de pilotos','D09R04 Sala de espera heli','D09R05 Descanso y cocina fría','D09R06 / R07 Aseos','D09R08 ERT','D09R10 Primeros auxilios','D09R11 DIFFS','D09R32 / R33 Vestuarios'],'cab');
+A(9,'9.01','Talleres y aseos noroeste',LG,[168,265,295,313],['D09R24 Taller eléctrico','D09R23 Aseo','D09R27 Armarios transformador auxiliar'],null);
+A(9,'9.02','Almacén eléctrico','#9a7bc0',[168,313,295,365],['D09R25 Almacén eléctrico'],null);
+A(9,'9.03','Generadores diésel y sistemas contra incendios','#6fd36f',[168,365,295,570],['D09R26 / D09R18 Generador diésel','D09R22 Sistema de gas inerte','D09R28 CAFS','Sump tanks'],'tank');
+A(9,'9.04','Almacén mecánico','#6c6cf0',[168,570,295,610],['D09R21 Almacén mecánico','D09R20 Taller mecánico'],null);
+A(9,'9.07','Almacenes y materiales peligrosos','#c9ec8d',[295,562,740,610],['D09R12 Repuestos','D09R13 Materiales peligrosos','D09R14 Pintura','D09R15 Aparejos de izado','D09R16 Almacén de cubierta','D09R17 Basuras','D09R29 Provisiones','D09R31 HSE'],'cab');
+A(9,'9.08','Pasillo sur',TEAL,[215,610,455,655],['D09C02 Pasillo','D09E01 Ascensor','D09R30 Armarios telecom','D09R19 Aseo'],null);
+A(9,'9.09','Troncal de servicio suroeste',PURP,[168,610,232,660],['D09T04 Troncal de servicio (nota 7)'],null);
+shafts(9,['6.11','6.07','6.09','6.01']);
+/* Nivel 10 */
+A(10,'10.01','Expansión de agua de refrigeración','#f2e34a',[168,235,310,345],['D10R01 Tanques de expansión','Área de laydown','Esclusa D10A01'],'tank');
+A(10,'10.02','Refrigeración de generadores diésel','#6fc3e0',[168,345,310,545],['D10R03 / D10R04 Refrigeración de generadores diésel','Estación de bunkering','Entradas de aire'],'tank');
+A(10,'10.03','Entrada de aire de generadores','#8a8a2a',[168,545,300,625],['D10R05 / D10R06 Entrada de aire de generadores','Maquinaria del ascensor'],null);
+A(10,'10.04','Helipuerto','#6fe06f',[[740,235,830,585],[405,535,830,585]],['Helideck','Armario de rescate','Cabrestante de tiro (solo puesta en marcha)','Cartel de identificación de la plataforma'],null);
+A(11,'11.01','Plataforma generador MJE','#bfc9f0',[840,625,975,790],['Generador diésel MJE','Tanque IBC de combustible','Tanque IBC de agua técnica','Tanque IBC de urea'],'tank');
+A(11,'11.02','Reposo de pluma de grúa','#f5b83a',[222,758,292,812],['Reposo de pluma','Capot de chorro (jet hood)'],null);
+shafts(10,['6.11','','6.09','6.01'],true,true);
+
+/* ---------- Geometría exacta (medida sobre los vectores del PDF, en metros; x hacia el este, z hacia el sur, eje A y eje 1 = 0) ---------- */
+var GEO={"0|0.02":{"c":"#74edff","g":[[[-12.36,-39.77],[20.01,-39.83],[20.01,5.31],[12.32,5.24],[12.18,2.22],[7.77,2.28],[7.91,5.18],[-12.36,5.24]]]},"0|0.03":{"c":"#ffd44d","g":[[[19.79,-39.62],[37.64,-39.59],[37.81,-0.05],[36.03,-0.1],[36.04,5.3],[19.79,5.34]]]},"0|0.04":{"c":"#e6c4ff","g":[[[40.86,0.09],[37.96,0.09],[37.96,-39.61],[66.3,-39.6],[66.36,-22.68],[62.67,-22.75],[62.87,0.08],[42.52,-0.03]]]},"0|0.01":{"c":"#c47ed1","g":[[[7.83,2.52],[11.99,2.52],[11.99,5.57],[7.83,5.57]]]},"0|0.05":{"c":"#ff4d4d","g":[[[9.82,-43.22],[22.04,-43.22],[22.04,-39.68],[9.82,-39.68]]]},"1|1.13":{"c":"#a6a64d","g":[[[4.87,5.23],[4.95,9.59],[-19.18,9.56],[-19.2,-4.8],[-14.33,-4.8],[-14.45,-22.85],[-19.16,-22.81],[-19.2,-40.98],[-19.2,-44.32],[-12.45,-44.34],[-12.55,5.2]]]},"1|1.15":{"c":"#ff4d4d","g":[[[-12.43,-43.36],[-5.49,-43.36],[-5.49,-39.68],[-12.43,-39.68]]]},"1|1.08":{"c":"#599def","g":[[[-12.47,-43.54],[-12.47,-44.36],[-2.01,-44.34],[-1.18,-42.43],[1.22,-42.47],[1.98,-44.4],[51.21,-44.32],[51.19,-46.19],[68.03,-46.17],[68.03,-38.38],[70.46,-38.4],[70.46,-30.01],[68.0,-30.01],[68.05,-21.09],[64.38,-21.05],[64.35,-16.38],[62.69,-16.38],[62.69,-22.79],[66.31,-22.81],[66.25,-31.78],[68.63,-31.8],[68.58,-36.68],[66.25,-36.63],[66.2,-39.59],[21.74,-39.53],[21.79,-41.92],[18.25,-41.92],[18.19,-39.61],[13.87,-39.61],[13.85,-42.57],[9.08,-42.57],[9.11,-39.64],[-5.44,-39.55],[-5.46,-43.48]]]},"1|1.05":{"c":"#adad4d","g":[[[9.05,-39.51],[9.14,-41.16],[9.14,-42.55],[13.89,-42.57],[13.89,-39.57],[14.51,-39.53],[14.53,-34.27],[-12.52,-34.21],[-12.51,-39.51]]]},"1|1.06":{"c":"#ffc44d","g":[[[14.64,-39.51],[43.92,-39.51],[43.92,-34.21],[14.64,-34.21]],[[18.29,-41.79],[21.72,-41.79],[21.72,-39.66],[18.29,-39.66]]]},"1|1.07":{"c":"#d6fb9d","g":[[[44.0,-39.49],[62.67,-39.49],[62.67,-34.17],[44.0,-34.17]]]},"1|1.09":{"c":"#ff4d4d","g":[[[62.7,-25.12],[62.68,-31.45],[62.68,-39.57],[66.29,-39.57],[66.24,-36.66],[68.68,-36.62],[68.69,-31.77],[66.28,-31.76],[66.25,-22.82],[62.7,-22.81]]]},"1|1.04":{"c":"#7bc1f8","g":[[[24.74,-34.11],[62.54,-34.11],[62.54,-0.1],[24.74,-0.1]]]},"1|1.03":{"c":"#a2a2d2","g":[[[20.03,-34.07],[24.59,-34.07],[24.59,0.01],[20.03,0.01]]]},"1|1.02":{"c":"#ff4d4d","g":[[[0.13,-34.09],[19.93,-34.09],[19.93,-0.1],[0.13,-0.1]]]},"1|1.01":{"c":"#ffff4d","g":[[[-12.48,-34.05],[-0.09,-34.05],[-0.09,-0.05],[-12.48,-0.05]]]},"1|1.10":{"c":"#50ad60","g":[[[44.57,7.13],[39.58,7.02],[27.87,7.02],[14.67,7.13],[14.67,5.36],[36.09,5.31],[36.18,0.05],[47.53,0.05],[47.57,7.21]]]},"1|1.11":{"c":"#fbabff","g":[[[12.18,0.12],[36.07,0.12],[36.07,5.25],[12.18,5.25]]]},"1|1.12":{"c":"#79a6a6","g":[[[-12.57,0.0],[12.22,-0.11],[12.18,2.32],[7.91,2.29],[7.88,5.34],[-12.57,5.31]]]},"1|1.14":{"c":"#ff4d4d","g":[[[4.95,5.5],[14.63,5.5],[14.63,9.47],[4.95,9.47]]]},"1|0.01":{"c":"#c47ed1","g":[[[8.0,2.44],[12.09,2.44],[12.09,5.32],[8.0,5.32]]]},"2|1.15":{"c":"#ff4d4d","g":[[[-12.38,-43.45],[-1.79,-43.45],[-1.79,-39.7],[-12.38,-39.7]]]},"2|2.04":{"c":"#c47ed1","g":[[[-12.56,-39.51],[-5.36,-39.51],[-5.36,-34.24],[-12.56,-34.24]]]},"2|2.05":{"c":"#c4d24d","g":[[[-5.33,-39.79],[14.42,-39.79],[14.42,-34.24],[-5.33,-34.24]]]},"2|2.06":{"c":"#ffc44d","g":[[[14.54,-39.8],[47.17,-39.8],[47.17,-34.29],[14.54,-34.29]]]},"2|2.07":{"c":"#d6fb9d","g":[[[47.07,-39.68],[60.16,-39.68],[60.16,-34.17],[47.07,-34.17]]]},"2|1.09":{"c":"#ff4d4d","g":[[[62.66,-34.18],[60.1,-34.12],[60.16,-39.51],[66.22,-39.71],[66.22,-36.42],[68.52,-36.42],[68.72,-31.82],[67.21,-31.55],[67.14,-22.6],[62.82,-22.56]]]},"2|2.01":{"c":"#dbdbdb","g":[[[-12.48,-34.19],[-0.24,-34.19],[-0.24,-0.17],[-12.48,-0.17]]]},"2|2.03":{"c":"#adad4d","g":[[[4.68,-25.23],[-0.17,-25.23],[-0.17,-34.28],[19.98,-34.11],[19.73,0.02],[15.04,0.1],[10.03,0.1],[-0.58,0.02],[-0.42,-9.52],[4.76,-9.77]]]},"2|2.10":{"c":"#c47ed1","g":[[[-12.61,0.13],[-5.39,0.13],[-5.39,5.29],[-12.61,5.29]]]},"2|2.08":{"c":"#ffc2a2","g":[[[12.31,0.09],[38.11,0.09],[38.11,5.38],[12.31,5.38]]]},"2|1.14":{"c":"#ff4d4d","g":[[[1.95,5.3],[14.39,5.3],[14.39,9.61],[1.95,9.61]]]},"2|2.02":{"c":"#79c487","g":[[[-0.08,-25.41],[4.73,-25.41],[4.73,-9.54],[-0.08,-9.54]]]},"2|2.09":{"c":"#4da6a6","g":[[[-5.35,0.09],[12.14,0.18],[12.22,2.6],[7.84,2.57],[7.74,5.25],[-5.34,5.33]]]},"2|0.01":{"c":"#c47ed1","g":[[[7.86,2.38],[11.95,2.38],[11.95,5.26],[7.86,5.26]]]},"3|1.15":{"c":"#ff4d4d","g":[[[-12.45,-43.43],[-1.86,-43.43],[-1.86,-39.69],[-12.45,-39.69]]]},"3|3.03":{"c":"#c47ed1","g":[[[-12.45,-39.48],[-5.23,-39.48],[-5.23,-34.24],[-12.45,-34.24]]]},"3|3.04":{"c":"#c4d24d","g":[[[-5.14,-39.53],[14.61,-39.53],[14.61,-34.18],[-5.14,-34.18]]]},"3|3.11":{"c":"#74edff","g":[[[9.77,-45.54],[19.93,-45.54],[19.93,-39.65],[9.77,-39.65]]]},"3|3.05":{"c":"#ffc44d","g":[[[14.68,-39.51],[46.83,-39.51],[46.83,-34.38],[14.68,-34.38]]]},"3|3.06":{"c":"#d6fb9d","g":[[[46.96,-39.51],[60.04,-39.51],[60.04,-34.26],[46.96,-34.26]]]},"3|3.10":{"c":"#c4c4c4","g":[[[-12.66,-34.12],[-9.59,-34.12],[-9.59,-0.01],[-12.66,-0.01]],[[-2.94,-34.12],[0.08,-34.12],[0.08,-0.01],[-2.94,-0.01]],[[-9.59,-34.12],[-2.94,-34.12],[-2.94,-30.89],[-9.59,-30.89]],[[-9.59,-3.08],[-2.94,-3.08],[-2.94,-0.01],[-9.59,-0.01]]]},"3|3.01":{"c":"#50ad60","g":[[[-9.59,-30.89],[-2.94,-30.89],[-2.94,-3.08],[-9.59,-3.08]]]},"3|3.07":{"c":"#fbabff","g":[[[19.89,0.07],[36.2,0.07],[36.2,5.43],[19.89,5.43]]]},"3|3.09":{"c":"#c47ed1","g":[[[-12.61,0.1],[-5.39,0.1],[-5.39,5.42],[-12.61,5.42]]]},"3|3.08":{"c":"#4da6a6","g":[[[-5.32,3.39],[-5.32,0.03],[19.86,0.09],[19.8,5.46],[12.18,5.23],[12.12,2.47],[7.84,2.47],[7.84,5.5],[-5.26,5.5]]]},"3|1.14":{"c":"#ff4d4d","g":[[[4.89,5.38],[14.8,5.38],[14.8,9.56],[4.89,9.56]]]},"3|0.01":{"c":"#c47ed1","g":[[[7.86,2.6],[11.95,2.6],[11.95,5.49],[7.86,5.49]]]},"3|1.09":{"c":"#ff4d4d","g":[[[62.65,-34.14],[62.69,-22.75],[66.31,-22.75],[66.27,-39.61],[60.06,-39.61],[60.14,-34.18]]]},"3|3.02":{"c":"#ff4d4d","g":[[[0.12,-34.07],[20.02,-34.07],[19.97,-0.02],[0.06,-0.02]]]},"4|1.15":{"c":"#ff4d4d","g":[[[-12.55,-43.5],[-1.86,-43.5],[-1.86,-39.57],[-12.55,-39.57]]]},"4|4.03":{"c":"#c47ed1","g":[[[-12.48,-39.48],[-5.46,-39.48],[-5.46,-34.24],[-12.48,-34.24]]]},"4|4.04":{"c":"#c4d24d","g":[[[-5.27,-39.44],[14.48,-39.44],[14.48,-34.09],[-5.27,-34.09]]]},"4|4.05":{"c":"#ffc44d","g":[[[14.68,-39.65],[46.83,-39.65],[46.83,-34.25],[14.68,-34.25]]]},"4|4.06":{"c":"#d6fb9d","g":[[[47.05,-39.53],[62.54,-39.53],[62.54,-34.25],[47.05,-34.25]]]},"4|4.01":{"c":"#ffff4d","g":[[[-12.6,-34.04],[-0.2,-34.04],[-0.2,0.14],[-12.6,0.14]]]},"4|4.02":{"c":"#4dff4d","g":[[[49.9,-34.23],[62.53,-34.23],[62.53,-0.05],[49.9,-0.05]]]},"4|4.07":{"c":"#50ad60","g":[[[64.83,-7.2],[64.69,1.9],[54.11,1.87],[54.13,3.57],[36.2,3.57],[36.17,0.03],[62.63,-0.05],[62.66,-7.18]]]},"4|4.08":{"c":"#fbabff","g":[[[20.14,0.04],[36.09,0.04],[36.09,5.4],[20.14,5.4]]]},"4|4.09":{"c":"#4da6a6","g":[[[-5.18,3.36],[-5.18,0.0],[20.0,0.06],[19.95,5.43],[12.33,5.2],[12.26,2.44],[7.98,2.44],[7.98,5.47],[-5.11,5.47]]]},"4|4.10":{"c":"#c47ed1","g":[[[-12.61,0.07],[-5.23,0.07],[-5.23,5.36],[-12.61,5.36]]]},"4|1.14":{"c":"#ff4d4d","g":[[[1.96,5.39],[20.15,5.39],[20.15,9.5],[1.96,9.5]]]},"4|0.01":{"c":"#c47ed1","g":[[[8.03,2.51],[12.12,2.51],[12.12,5.4],[8.03,5.4]]]},"4|1.09":{"c":"#ff4d4d","g":[[[66.2,-39.56],[66.25,-22.78],[62.63,-22.78],[62.74,-39.56]]]},"5|1.15":{"c":"#ff4d4d","g":[[[-12.55,-43.64],[-1.86,-43.64],[-1.86,-39.71],[-12.55,-39.71]]]},"5|5.06":{"c":"#c47ed1","g":[[[-12.56,-39.48],[-5.34,-39.48],[-5.34,-34.24],[-12.56,-34.24]]]},"5|5.07":{"c":"#c4d24d","g":[[[-5.2,-39.6],[20.01,-39.6],[20.01,-34.25],[-5.2,-34.25]]]},"5|5.08":{"c":"#ffc44d","g":[[[20.02,-39.45],[44.03,-39.45],[44.03,-34.29],[20.02,-34.29]]]},"5|5.09":{"c":"#d6fb9d","g":[[[44.03,-39.49],[60.04,-39.49],[60.04,-34.2],[44.03,-34.2]]]},"5|1.09":{"c":"#ff4d4d","g":[[[62.65,-34.05],[60.09,-34.12],[60.15,-39.51],[66.27,-39.45],[66.27,-24.31],[66.21,-22.8],[62.72,-22.67]]]},"5|5.01":{"c":"#599def","g":[[[-12.63,-34.14],[-0.08,-34.14],[-0.08,0.04],[-12.63,0.04]]]},"5|5.03":{"c":"#ff904d","g":[[[-0.05,-34.21],[11.99,-34.21],[11.99,-16.13],[-0.05,-16.13]]]},"5|5.04":{"c":"#4d4dff","g":[[[12.15,-34.01],[20.08,-34.01],[20.08,0.09],[12.15,0.09]]]},"5|5.05":{"c":"#fbabff","g":[[[19.97,-34.24],[62.74,-34.24],[62.74,-0.05],[19.97,-0.05]]]},"5|5.02":{"c":"#fdf8a9","g":[[[-0.24,-15.91],[11.81,-15.91],[11.81,-0.09],[-0.24,-0.09]]]},"5|5.12":{"c":"#c47ed1","g":[[[-12.61,0.07],[-5.23,0.07],[-5.23,5.36],[-12.61,5.36]]]},"5|5.11":{"c":"#4da6a6","g":[[[-5.23,3.41],[-5.23,0.05],[19.95,0.11],[19.89,5.48],[12.27,5.25],[12.2,2.49],[7.93,2.49],[7.93,5.51],[-5.17,5.51]]]},"5|5.10":{"c":"#50ad60","g":[[[19.96,0.03],[37.78,0.03],[37.78,5.3],[19.96,5.3]]]},"5|0.01":{"c":"#c47ed1","g":[[[8.03,2.51],[12.12,2.51],[12.12,5.4],[8.03,5.4]]]},"5|1.14":{"c":"#ff4d4d","g":[[[1.96,5.39],[20.15,5.39],[20.15,9.5],[1.96,9.5]]]},"6|6.11":{"c":"#ff4d4d","g":[[[-12.59,-43.33],[-1.91,-43.33],[-1.91,-39.41],[-12.59,-39.41]]]},"6|6.03":{"c":"#c47ed1","g":[[[-12.47,-39.67],[-5.24,-39.67],[-5.24,-34.43],[-12.47,-34.43]]]},"6|6.04":{"c":"#c4d24d","g":[[[-5.28,-39.36],[19.93,-39.36],[19.93,-34.01],[-5.28,-34.01]]]},"6|6.05":{"c":"#ffc44d","g":[[[20.11,-39.64],[44.13,-39.64],[44.13,-34.48],[20.11,-34.48]]]},"6|6.06":{"c":"#d6fb9d","g":[[[44.13,-39.67],[60.14,-39.67],[60.14,-34.39],[44.13,-34.39]]]},"6|6.07":{"c":"#ff4d4d","g":[[[62.75,-34.24],[60.19,-34.31],[60.25,-39.7],[66.37,-39.64],[66.37,-24.5],[66.31,-22.99],[62.82,-22.86]]]},"6|6.02":{"c":"#74edff","g":[[[-12.63,-34.14],[2.47,-34.14],[2.47,0.04],[-12.63,0.04]]]},"6|6.10":{"c":"#c47ed1","g":[[[-12.54,0.04],[-5.16,0.04],[-5.16,5.33],[-12.54,5.33]]]},"6|6.01":{"c":"#c47ed1","g":[[[8.06,2.36],[12.15,2.36],[12.15,5.25],[8.06,5.25]]]},"6|6.08":{"c":"#4da6a6","g":[[[-5.31,3.12],[-5.31,-0.24],[19.87,-0.18],[19.82,5.19],[12.25,5.3],[12.13,2.2],[7.85,2.2],[7.85,5.22],[-5.24,5.22]]]},"6|6.09":{"c":"#ff4d4d","g":[[[1.86,5.2],[14.42,5.2],[14.42,9.51],[1.86,9.51]]]},"7|7.11":{"c":"#50ad60","g":[[[-12.62,-43.27],[-14.35,-43.27],[-14.35,-34.14],[-14.96,-34.1],[-15.0,-22.79],[-19.77,-22.71],[-19.73,-7.25],[-12.58,-7.2]]]},"7|6.11":{"c":"#ff4d4d","g":[[[-12.47,-43.44],[-1.75,-43.44],[-1.75,-39.51],[-12.47,-39.51]]]},"7|7.05":{"c":"#c47ed1","g":[[[-12.49,-39.41],[-4.51,-39.41],[-4.51,-34.16],[-12.49,-34.16]]]},"7|7.06":{"c":"#c4d24d","g":[[[-4.47,-39.56],[20.08,-39.56],[20.08,-34.21],[-4.47,-34.21]]]},"7|7.07":{"c":"#ffc44d","g":[[[20.01,-39.49],[44.03,-39.49],[44.03,-34.33],[20.01,-34.33]]]},"7|7.08":{"c":"#d6fb9d","g":[[[43.99,-39.5],[60.0,-39.5],[60.0,-34.21],[43.99,-34.21]]]},"7|6.07":{"c":"#ff4d4d","g":[[[62.6,-34.24],[60.03,-34.3],[60.1,-39.7],[66.22,-39.63],[66.22,-24.5],[66.15,-22.98],[62.66,-22.85]]]},"7|7.04":{"c":"#4dffff","g":[[[-12.54,-34.1],[2.34,-34.14],[2.59,0.11],[-12.7,-0.06],[-12.74,-10.82],[-3.57,-10.91],[-3.57,-22.71],[-12.49,-22.87]]]},"7|7.03":{"c":"#7d7d7d","g":[[[12.15,-34.01],[20.08,-34.01],[20.08,0.09],[12.15,0.09]]]},"7|7.10":{"c":"#c47ed1","g":[[[-12.49,0.05],[-5.11,0.05],[-5.11,5.34],[-12.49,5.34]]]},"7|7.09":{"c":"#4da6a6","g":[[[-5.32,3.49],[-5.32,0.14],[19.86,0.19],[19.81,5.57],[12.24,5.67],[12.12,2.57],[7.84,2.57],[7.84,5.6],[-5.25,5.6]]]},"7|6.09":{"c":"#ff4d4d","g":[[[1.95,5.36],[14.51,5.36],[14.51,9.67],[1.95,9.67]]]},"7|6.01":{"c":"#c47ed1","g":[[[7.91,2.46],[12.0,2.46],[12.0,5.35],[7.91,5.35]]]},"7|7.02":{"c":"#ffff4d","g":[[[-12.55,-16.87],[-3.64,-16.87],[-3.64,-10.87],[-12.55,-10.87]]]},"7|7.01":{"c":"#4da6d2","g":[[[-12.87,-22.84],[-3.86,-22.84],[-3.86,-16.85],[-12.87,-16.85]]]},"8|6.11":{"c":"#ff4d4d","g":[[[-12.38,-43.69],[-1.69,-43.69],[-1.69,-39.71],[-12.38,-39.71]]]},"8|8.04":{"c":"#c47ed1","g":[[[-12.45,-39.56],[-5.38,-39.56],[-5.38,-34.32],[-12.45,-34.32]]]},"8|8.05":{"c":"#c4d24d","g":[[[-5.2,-39.59],[20.08,-39.59],[20.08,-34.06],[-5.2,-34.06]]]},"8|8.06":{"c":"#ffc44d","g":[[[20.12,-39.64],[52.99,-39.64],[52.99,-34.12],[20.12,-34.12]],[[50.01,-34.07],[62.51,-34.07],[62.51,-31.78],[50.01,-31.78]]]},"8|6.07":{"c":"#ff4d4d","g":[[[62.73,-34.28],[62.55,-34.38],[62.49,-39.69],[66.35,-39.68],[66.35,-24.54],[66.33,-22.86],[62.79,-22.9]]]},"8|8.07":{"c":"#d6fb9d","g":[[[53.11,-39.65],[62.54,-39.65],[62.54,-34.37],[53.11,-34.37]]]},"8|8.03":{"c":"#4dff4d","g":[[[49.97,-31.72],[62.73,-31.72],[62.73,-0.14],[49.97,-0.14]]]},"8|8.02":{"c":"#74edff","g":[[[12.03,-34.15],[19.96,-34.15],[19.96,-0.05],[12.03,-0.05]]]},"8|8.01":{"c":"#4d4dff","g":[[[-12.67,-34.14],[2.47,-34.01],[2.44,0.03],[-12.71,0.11],[-12.6,-10.73],[-3.53,-10.78],[-3.41,-22.83],[-12.5,-22.8]]]},"8|8.09":{"c":"#4da6a6","g":[[[-5.46,3.34],[-5.46,-0.02],[19.95,0.11],[19.95,5.36],[11.94,5.38],[11.98,2.41],[7.7,2.41],[7.7,5.44],[-5.39,5.44]]]},"8|8.10":{"c":"#c47ed1","g":[[[-12.67,0.16],[-5.29,0.16],[-5.29,5.44],[-12.67,5.44]]]},"8|6.09":{"c":"#ff4d4d","g":[[[1.94,5.35],[14.5,5.35],[14.5,9.66],[1.94,9.66]]]},"8|8.08":{"c":"#50ad60","g":[[[44.16,-0.09],[54.12,-0.09],[54.12,3.62],[44.16,3.62]]]},"8|6.01":{"c":"#c47ed1","g":[[[7.91,2.46],[12.14,2.46],[12.14,5.35],[7.91,5.35]]]},"9|6.11":{"c":"#ff4d4d","g":[[[-12.46,-43.6],[-1.77,-43.6],[-1.77,-39.63],[-12.46,-39.63]]]},"9|9.01":{"c":"#c4d24d","g":[[[-12.61,-39.53],[-1.86,-39.51],[-1.86,-34.18],[-12.59,-34.22]]]},"9|9.02":{"c":"#8787c4","g":[[[-12.52,-34.26],[1.96,-34.13],[1.92,-29.77],[-12.48,-29.61]]]},"9|9.03":{"c":"#79c487","g":[[[-12.65,-29.87],[1.87,-29.7],[1.9,-4.7],[-12.57,-4.93]]]},"9|9.04":{"c":"#8787c4","g":[[[-12.61,-4.82],[1.9,-4.83],[1.86,0.09],[-12.69,0.02]]]},"9|9.08":{"c":"#4da6a6","g":[[[-7.61,3.27],[-7.56,0.03],[19.96,-0.02],[20.08,5.3],[12.17,5.33],[12.22,2.36],[7.94,2.36],[7.94,5.39],[-7.67,5.35]]]},"9|9.09":{"c":"#a64da6","g":[[[-12.56,0.05],[-7.67,0.05],[-7.67,5.41],[-12.56,5.41]]]},"9|9.05":{"c":"#ffd24d","g":[[[-1.76,-39.49],[52.48,-39.59],[52.26,-5.24],[14.61,-5.39],[14.63,0.03],[1.82,-0.09],[2.06,-34.06],[-1.76,-34.1]]]},"9|9.07":{"c":"#d6fb9d","g":[[[14.49,-5.31],[52.28,-5.31],[52.28,0.05],[14.49,0.05]]]},"9|9.06":{"c":"#74edff","g":[[[52.26,-39.61],[62.66,-39.61],[62.66,-0.06],[52.26,-0.06]]]},"9|6.07":{"c":"#ff4d4d","g":[[[62.66,-34.21],[62.48,-34.3],[62.42,-39.62],[66.28,-39.6],[66.28,-24.47],[66.26,-22.78],[62.72,-22.82]]]},"9|6.01":{"c":"#c47ed1","g":[[[7.86,2.49],[11.95,2.49],[11.95,5.38],[7.86,5.38]]]},"9|6.09":{"c":"#ff4d4d","g":[[[1.95,5.33],[14.67,5.33],[14.67,9.51],[1.95,9.51]]]},"10|10.01":{"c":"#fdf8a9","g":[[[-12.59,-43.02],[-1.85,-43.0],[-1.78,-37.59],[1.87,-37.59],[1.89,-33.41],[-12.6,-33.4]]]},"10|6.11":{"c":"#ff4d4d","g":[[[-12.5,-46.9],[-1.81,-46.9],[-1.81,-43.15],[-12.5,-43.15]]]},"10|10.02":{"c":"#74edff","g":[[[-12.59,-33.44],[-5.35,-33.42],[-5.35,-25.05],[1.93,-25.05],[1.91,-16.64],[-5.39,-16.64],[-5.34,-8.25],[-12.56,-8.23]]]},"10|10.04":{"c":"#4dff4d","g":[[[52.38,-42.99],[66.37,-42.94],[66.36,-26.26],[62.66,-26.26],[62.77,-3.39],[14.57,-3.42],[14.57,-8.71],[52.41,-8.84]],[[20.08,-3.27],[31.2,-3.27],[31.2,-1.2],[20.08,-1.2]]]},"10|10.03":{"c":"#a6a64d","g":[[[-12.51,1.85],[-12.56,-8.27],[1.94,-8.27],[1.94,-3.45],[19.98,-3.42],[20.01,1.93],[12.13,1.93],[12.11,-1.78],[7.95,-1.78],[7.96,1.9]],[[2.11,1.94],[4.8,1.94],[4.8,6.09],[2.11,6.09]]]},"10|6.09":{"c":"#ff4d4d","g":[[[4.93,2.0],[14.6,2.0],[14.6,6.08],[4.93,6.08]]]},"11|11.02":{"c":"#ffd44d","g":[[[-6.42,16.72],[1.37,16.76],[1.39,27.26],[-6.48,27.22]]]},"11|11.01":{"c":"#c4d2ff","g":[[[60.48,3.54],[74.66,3.64],[74.74,28.81],[60.48,28.63],[60.48,20.4],[73.01,20.42],[72.93,12.03],[60.4,11.93]]]},"10|6.01":{"c":"#c47ed1","g":[[[8.01,-1.59],[12.0,-1.59],[12.0,1.86],[8.01,1.86]]]}};
+var VOIDS=[{"l":2,"id":"1.4","g":[[[20.14,-34.11],[62.53,-34.11],[62.53,-0.09],[20.14,-0.09]]]},{"l":3,"id":"1.4","g":[[[20.12,-34.27],[62.61,-34.27],[62.61,-0.08],[20.12,-0.08]]]},{"l":4,"id":"3.2","g":[[[-0.11,-34.13],[20.29,-34.21],[20.13,0.01],[-0.03,0.01],[-0.11,-25.33],[-0.11,-28.45],[-0.2,-30.34],[-0.11,-32.07]]]},{"l":4,"id":"1.4","g":[[[20.31,-33.98],[50.02,-33.98],[50.02,0.09],[20.31,0.09]]]},{"l":6,"id":"5.03","g":[[[2.47,-34.39],[11.99,-34.39],[11.99,-16.13],[2.47,-16.13]]]},{"l":6,"id":"5.04","g":[[[12.15,-34.01],[20.08,-34.01],[20.08,0.09],[12.15,0.09]]]},{"l":6,"id":"5.02","g":[[[2.47,-15.91],[11.81,-15.91],[11.81,-0.09],[2.47,-0.09]]]},{"l":6,"id":"5.05","g":[[[19.97,-34.24],[62.74,-34.24],[62.74,-0.05],[19.97,-0.05]]]},{"l":7,"id":"5.03","g":[[[2.47,-34.21],[11.99,-34.21],[11.99,-16.13],[2.47,-16.13]]]},{"l":7,"id":"5.05","g":[[[19.97,-34.24],[62.74,-34.24],[62.74,-0.05],[19.97,-0.05]]]},{"l":7,"id":"5.02","g":[[[2.47,-15.91],[11.81,-15.91],[11.81,-0.09],[2.47,-0.09]]]},{"l":8,"id":"5.03","g":[[[2.6,-34.12],[12.0,-34.12],[12.0,-16.04],[2.6,-16.04]]]},{"l":8,"id":"5.02","g":[[[2.47,-16.07],[12.21,-16.07],[12.21,-0.25],[2.47,-0.25]]]},{"l":8,"id":"5.05","g":[[[20.1,-34.2],[49.94,-34.2],[49.94,-0.01],[20.1,-0.01]]]},{"l":8,"id":"7.01","g":[[[-12.61,-22.75],[-3.61,-22.75],[-3.61,-16.76],[-12.61,-16.76]]]},{"l":8,"id":"7.02","g":[[[-12.72,-16.63],[-3.81,-16.63],[-3.81,-10.64],[-12.72,-10.64]]]}];
+var VNAME={'1.4':'Hueco Converter Reactor Room 1','3.2':'Hueco GIS 66 kV (nivel 3)','5.03':'Hueco Clean Room transformador B','5.02':'Hueco Clean Room transformador A','5.04':'Hueco Clean Room GIS 420 kV','5.05':'Hueco Converter Reactor Room 2','7.01':'Hueco zona auxiliar 7.01','7.02':'Hueco zona auxiliar 7.02'};
+/* cota de suelo terminado (HPFS) indicada en el plano, cuando es mayor que la cota de la plancha */
+var HP={'11|11.01':63.59,'11|11.02':63.4,'1|1.04':24.532,'2|2.01':29.01,'2|2.02':29.01,'2|2.03':29.01,'2|2.05':29.01,'2|2.04':30.66,'3|3.01':33.11,'3|3.02':33.11,'3|3.10':33.11,'3|3.04':33.11,'3|3.07':33.11,'3|3.08':33.11,'4|4.01':36.84,'4|4.04':36.84,'4|4.05':36.84,'4|4.09':36.84,'5|5.01':39.885,'5|5.02':39.885,'5|5.03':39.885,'5|5.07':39.885,'5|5.11':39.885,'6|6.02':45.21,'6|6.04':45.21,'7|7.04':49.63,'7|7.06':49.63,'7|7.03':49.83,'8|8.01':52.96,'8|8.02':52.96,'8|8.05':52.96,'8|8.09':52.96};
+/* Hoja del nivel 10: dibujada 3,45 m más al norte que las demás; detalles 1 y 2 reubicados */
+var L10={dz:3.45,d1:[-6.145,-63.69],d2:[0,0]};
+(function(){
+  function sh(k,fn){GEO[k].g.forEach(function(r){r.forEach(function(p){var q=fn(p[0],p[1]);p[0]=q[0];p[1]=q[1]})})}
+  Object.keys(GEO).forEach(function(k){if(k.indexOf('10|')===0||k.indexOf('11|')===0)sh(k,function(x,z){return [x,z+L10.dz]})});
+  VOIDS.forEach(function(v){if(v.l===10)v.g.forEach(function(r){r.forEach(function(p){p[1]+=L10.dz})})});
+  sh('11|11.02',function(x,z){return [x+L10.d1[0],z+L10.d1[1]]});
+  function bb(k){var a=[1e9,1e9,-1e9,-1e9]; GEO[k].g.forEach(function(r){r.forEach(function(p){a[0]=Math.min(a[0],p[0]);a[1]=Math.min(a[1],p[1]);a[2]=Math.max(a[2],p[0]);a[3]=Math.max(a[3],p[1])})}); return a}
+  var A=bb('10|10.02'),B=bb('11|11.01'); L10.d2=[(A[0]+A[2])/2-(B[0]+B[2])/2,(A[1]+A[3])/2-(B[1]+B[3])/2];
+  sh('11|11.01',function(x,z){return [x+L10.d2[0],z+L10.d2[1]]});
+})();
+var TILES={"0":{"f":"assets/plans/L0.webp","x0":-14.36,"z0":-45.22,"w":82.72,"h":52.79,"px":[2239,1429]},"1":{"f":"assets/plans/L1.webp","x0":-21.2,"z0":-48.19,"w":93.66,"h":59.78,"px":[2535,1618]},"2":{"f":"assets/plans/L2.webp","x0":-14.61,"z0":-45.45,"w":85.33,"h":57.06,"px":[2310,1545]},"3":{"f":"assets/plans/L3.webp","x0":-14.66,"z0":-47.54,"w":82.97,"h":59.1,"px":[2246,1600]},"4":{"f":"assets/plans/L4.webp","x0":-14.61,"z0":-45.5,"w":82.86,"h":57.0,"px":[2243,1543]},"5":{"f":"assets/plans/L5.webp","x0":-14.63,"z0":-45.64,"w":82.9,"h":57.14,"px":[2244,1547]},"6":{"f":"assets/plans/L6.webp","x0":-14.63,"z0":-45.33,"w":83.0,"h":56.84,"px":[2247,1539]},"7":{"f":"assets/plans/L7.webp","x0":-21.77,"z0":-45.44,"w":89.99,"h":57.11,"px":[2435,1546]},"8":{"f":"assets/plans/L8.webp","x0":-14.71,"z0":-45.69,"w":83.06,"h":57.35,"px":[2248,1552]},"9":{"f":"assets/plans/L9.webp","x0":-14.69,"z0":-45.6,"w":82.97,"h":57.11,"px":[2246,1546]},"10":{"f":"assets/plans/L10.webp","x0":-14.6,"z0":-48.9,"w":82.97,"h":56.99,"px":[2246,1543]},"10d1":{"f":"assets/plans/L10d1.webp","x0":-8.48,"z0":14.72,"w":11.87,"h":14.54,"px":[322,394]},"10d2":{"f":"assets/plans/L10d2.webp","x0":58.4,"z0":1.54,"w":18.34,"h":29.27,"px":[497,793]}};
+var AT={"0|0.01":{"f":"assets/areas/0_0.01.webp","x0":7.43,"z0":2.12,"w":4.96,"h":3.85},"0|0.02":{"f":"assets/areas/0_0.02.webp","x0":-12.76,"z0":-40.23,"w":33.17,"h":45.94},"0|0.03":{"f":"assets/areas/0_0.03.webp","x0":19.39,"z0":-40.02,"w":18.82,"h":45.76},"0|0.04":{"f":"assets/areas/0_0.04.webp","x0":37.56,"z0":-40.01,"w":29.2,"h":40.5},"0|0.05":{"f":"assets/areas/0_0.05.webp","x0":9.42,"z0":-43.62,"w":13.02,"h":4.34},"10|10.01":{"f":"assets/areas/10_10.01.webp","x0":-13.0,"z0":-43.42,"w":15.29,"h":10.42},"10|10.02":{"f":"assets/areas/10_10.02.webp","x0":-12.99,"z0":-33.84,"w":15.32,"h":26.01},"10|10.03":{"f":"assets/areas/10_10.03.webp","x0":-12.96,"z0":-8.67,"w":33.37,"h":15.16},"10|10.04":{"f":"assets/areas/10_10.04.webp","x0":14.17,"z0":-43.39,"w":52.6,"h":42.59},"11|11.01":{"f":"assets/areas/10_11.01.webp","x0":60.0,"z0":3.14,"w":15.14,"h":26.07},"11|11.02":{"f":"assets/areas/10_11.02.webp","x0":-6.88,"z0":16.32,"w":8.67,"h":11.34},"10|6.01":{"f":"assets/areas/10_6.01.webp","x0":7.61,"z0":-1.99,"w":4.79,"h":4.25},"10|6.09":{"f":"assets/areas/10_6.09.webp","x0":4.53,"z0":1.6,"w":10.47,"h":4.88},"10|6.11":{"f":"assets/areas/10_6.11.webp","x0":-12.9,"z0":-47.3,"w":11.49,"h":4.55},"1|0.01":{"f":"assets/areas/1_0.01.webp","x0":7.6,"z0":2.04,"w":4.89,"h":3.68},"1|1.01":{"f":"assets/areas/1_1.01.webp","x0":-12.88,"z0":-34.45,"w":13.19,"h":34.8},"1|1.02":{"f":"assets/areas/1_1.02.webp","x0":-0.27,"z0":-34.49,"w":20.6,"h":34.79},"1|1.03":{"f":"assets/areas/1_1.03.webp","x0":19.63,"z0":-34.47,"w":5.36,"h":34.88},"1|1.04":{"f":"assets/areas/1_1.04.webp","x0":24.34,"z0":-34.51,"w":38.6,"h":34.81},"1|1.05":{"f":"assets/areas/1_1.05.webp","x0":-12.92,"z0":-42.97,"w":27.85,"h":9.16},"1|1.06":{"f":"assets/areas/1_1.06.webp","x0":14.24,"z0":-42.19,"w":30.08,"h":8.38},"1|1.07":{"f":"assets/areas/1_1.07.webp","x0":43.6,"z0":-39.89,"w":19.47,"h":6.12},"1|1.08":{"f":"assets/areas/1_1.08.webp","x0":-12.87,"z0":-46.59,"w":83.73,"h":30.61},"1|1.09":{"f":"assets/areas/1_1.09.webp","x0":62.28,"z0":-39.97,"w":6.81,"h":17.56},"1|1.10":{"f":"assets/areas/1_1.10.webp","x0":14.27,"z0":-0.35,"w":33.7,"h":7.96},"1|1.11":{"f":"assets/areas/1_1.11.webp","x0":11.78,"z0":-0.28,"w":24.69,"h":5.93},"1|1.12":{"f":"assets/areas/1_1.12.webp","x0":-12.97,"z0":-0.51,"w":25.59,"h":6.25},"1|1.13":{"f":"assets/areas/1_1.13.webp","x0":-19.6,"z0":-44.74,"w":24.95,"h":54.73},"1|1.14":{"f":"assets/areas/1_1.14.webp","x0":4.55,"z0":5.1,"w":10.48,"h":4.77},"1|1.15":{"f":"assets/areas/1_1.15.webp","x0":-12.83,"z0":-43.76,"w":7.74,"h":4.48},"2|0.01":{"f":"assets/areas/2_0.01.webp","x0":7.46,"z0":1.98,"w":4.89,"h":3.68},"2|1.09":{"f":"assets/areas/2_1.09.webp","x0":59.7,"z0":-40.11,"w":9.42,"h":17.95},"2|1.14":{"f":"assets/areas/2_1.14.webp","x0":1.55,"z0":4.9,"w":13.24,"h":5.11},"2|1.15":{"f":"assets/areas/2_1.15.webp","x0":-12.78,"z0":-43.85,"w":11.39,"h":4.55},"2|2.01":{"f":"assets/areas/2_2.01.webp","x0":-12.88,"z0":-34.59,"w":13.04,"h":34.82},"2|2.02":{"f":"assets/areas/2_2.02.webp","x0":-0.48,"z0":-25.81,"w":5.61,"h":16.67},"2|2.03":{"f":"assets/areas/2_2.03.webp","x0":-0.98,"z0":-34.68,"w":21.36,"h":35.18},"2|2.04":{"f":"assets/areas/2_2.04.webp","x0":-12.96,"z0":-39.91,"w":8.0,"h":6.07},"2|2.05":{"f":"assets/areas/2_2.05.webp","x0":-5.73,"z0":-40.19,"w":20.55,"h":6.35},"2|2.06":{"f":"assets/areas/2_2.06.webp","x0":14.14,"z0":-40.2,"w":33.43,"h":6.31},"2|2.07":{"f":"assets/areas/2_2.07.webp","x0":46.67,"z0":-40.08,"w":13.89,"h":6.31},"2|2.08":{"f":"assets/areas/2_2.08.webp","x0":11.91,"z0":-0.31,"w":26.6,"h":6.09},"2|2.09":{"f":"assets/areas/2_2.09.webp","x0":-5.75,"z0":-0.31,"w":18.37,"h":6.04},"2|2.10":{"f":"assets/areas/2_2.10.webp","x0":-13.01,"z0":-0.27,"w":8.02,"h":5.96},"3|0.01":{"f":"assets/areas/3_0.01.webp","x0":7.46,"z0":2.2,"w":4.89,"h":3.69},"3|1.09":{"f":"assets/areas/3_1.09.webp","x0":59.66,"z0":-40.01,"w":7.05,"h":17.66},"3|1.14":{"f":"assets/areas/3_1.14.webp","x0":4.49,"z0":4.98,"w":10.71,"h":4.98},"3|1.15":{"f":"assets/areas/3_1.15.webp","x0":-12.85,"z0":-43.83,"w":11.39,"h":4.54},"3|3.01":{"f":"assets/areas/3_3.01.webp","x0":-9.99,"z0":-31.29,"w":7.45,"h":28.61},"3|3.02":{"f":"assets/areas/3_3.02.webp","x0":-0.34,"z0":-34.47,"w":20.76,"h":34.85},"3|3.03":{"f":"assets/areas/3_3.03.webp","x0":-12.85,"z0":-39.88,"w":8.02,"h":6.04},"3|3.04":{"f":"assets/areas/3_3.04.webp","x0":-5.54,"z0":-39.93,"w":20.55,"h":6.15},"3|3.05":{"f":"assets/areas/3_3.05.webp","x0":14.28,"z0":-39.91,"w":32.95,"h":5.93},"3|3.06":{"f":"assets/areas/3_3.06.webp","x0":46.56,"z0":-39.91,"w":13.88,"h":6.05},"3|3.07":{"f":"assets/areas/3_3.07.webp","x0":19.49,"z0":-0.33,"w":17.11,"h":6.16},"3|3.08":{"f":"assets/areas/3_3.08.webp","x0":-5.72,"z0":-0.37,"w":25.98,"h":6.27},"3|3.09":{"f":"assets/areas/3_3.09.webp","x0":-13.01,"z0":-0.3,"w":8.02,"h":6.12},"3|3.10":{"f":"assets/areas/3_3.10.webp","x0":-13.06,"z0":-34.52,"w":13.54,"h":34.91},"3|3.11":{"f":"assets/areas/3_3.11.webp","x0":9.37,"z0":-45.94,"w":10.96,"h":6.69},"4|0.01":{"f":"assets/areas/4_0.01.webp","x0":7.63,"z0":2.11,"w":4.89,"h":3.69},"4|1.09":{"f":"assets/areas/4_1.09.webp","x0":62.23,"z0":-39.96,"w":4.42,"h":17.58},"4|1.14":{"f":"assets/areas/4_1.14.webp","x0":1.56,"z0":4.99,"w":18.99,"h":4.91},"4|1.15":{"f":"assets/areas/4_1.15.webp","x0":-12.95,"z0":-43.9,"w":11.49,"h":4.73},"4|4.01":{"f":"assets/areas/4_4.01.webp","x0":-13.0,"z0":-34.44,"w":13.2,"h":34.98},"4|4.02":{"f":"assets/areas/4_4.02.webp","x0":49.5,"z0":-34.63,"w":13.43,"h":34.98},"4|4.03":{"f":"assets/areas/4_4.03.webp","x0":-12.88,"z0":-39.88,"w":7.82,"h":6.04},"4|4.04":{"f":"assets/areas/4_4.04.webp","x0":-5.67,"z0":-39.84,"w":20.55,"h":6.15},"4|4.05":{"f":"assets/areas/4_4.05.webp","x0":14.28,"z0":-40.05,"w":32.95,"h":6.2},"4|4.06":{"f":"assets/areas/4_4.06.webp","x0":46.65,"z0":-39.93,"w":16.29,"h":6.08},"4|4.07":{"f":"assets/areas/4_4.07.webp","x0":35.77,"z0":-7.6,"w":29.46,"h":11.57},"4|4.08":{"f":"assets/areas/4_4.08.webp","x0":19.74,"z0":-0.36,"w":16.75,"h":6.16},"4|4.09":{"f":"assets/areas/4_4.09.webp","x0":-5.58,"z0":-0.4,"w":25.98,"h":6.27},"4|4.10":{"f":"assets/areas/4_4.10.webp","x0":-13.01,"z0":-0.33,"w":8.18,"h":6.09},"5|0.01":{"f":"assets/areas/5_0.01.webp","x0":7.63,"z0":2.11,"w":4.89,"h":3.69},"5|1.09":{"f":"assets/areas/5_1.09.webp","x0":59.69,"z0":-39.91,"w":6.98,"h":17.64},"5|1.14":{"f":"assets/areas/5_1.14.webp","x0":1.56,"z0":4.99,"w":18.99,"h":4.91},"5|1.15":{"f":"assets/areas/5_1.15.webp","x0":-12.95,"z0":-44.04,"w":11.49,"h":4.73},"5|5.01":{"f":"assets/areas/5_5.01.webp","x0":-13.03,"z0":-34.54,"w":13.35,"h":34.98},"5|5.02":{"f":"assets/areas/5_5.02.webp","x0":-0.64,"z0":-16.31,"w":12.85,"h":16.62},"5|5.03":{"f":"assets/areas/5_5.03.webp","x0":-0.45,"z0":-34.61,"w":12.84,"h":18.88},"5|5.04":{"f":"assets/areas/5_5.04.webp","x0":11.75,"z0":-34.41,"w":8.73,"h":34.9},"5|5.05":{"f":"assets/areas/5_5.05.webp","x0":19.57,"z0":-34.64,"w":43.57,"h":34.99},"5|5.06":{"f":"assets/areas/5_5.06.webp","x0":-12.96,"z0":-39.88,"w":8.02,"h":6.04},"5|5.07":{"f":"assets/areas/5_5.07.webp","x0":-5.6,"z0":-40.0,"w":26.01,"h":6.15},"5|5.08":{"f":"assets/areas/5_5.08.webp","x0":19.62,"z0":-39.85,"w":24.81,"h":5.96},"5|5.09":{"f":"assets/areas/5_5.09.webp","x0":43.63,"z0":-39.89,"w":16.81,"h":6.09},"5|5.10":{"f":"assets/areas/5_5.10.webp","x0":19.56,"z0":-0.37,"w":18.62,"h":6.07},"5|5.11":{"f":"assets/areas/5_5.11.webp","x0":-5.63,"z0":-0.35,"w":25.98,"h":6.26},"5|5.12":{"f":"assets/areas/5_5.12.webp","x0":-13.01,"z0":-0.33,"w":8.18,"h":6.09},"6|6.01":{"f":"assets/areas/6_6.01.webp","x0":7.66,"z0":1.96,"w":4.89,"h":3.69},"6|6.02":{"f":"assets/areas/6_6.02.webp","x0":-13.03,"z0":-34.54,"w":15.9,"h":34.98},"6|6.03":{"f":"assets/areas/6_6.03.webp","x0":-12.87,"z0":-40.07,"w":8.03,"h":6.04},"6|6.04":{"f":"assets/areas/6_6.04.webp","x0":-5.68,"z0":-39.76,"w":26.01,"h":6.15},"6|6.05":{"f":"assets/areas/6_6.05.webp","x0":19.71,"z0":-40.04,"w":24.82,"h":5.96},"6|6.06":{"f":"assets/areas/6_6.06.webp","x0":43.73,"z0":-40.07,"w":16.81,"h":6.08},"6|6.07":{"f":"assets/areas/6_6.07.webp","x0":59.79,"z0":-40.1,"w":6.98,"h":17.64},"6|6.08":{"f":"assets/areas/6_6.08.webp","x0":-5.71,"z0":-0.64,"w":25.98,"h":6.34},"6|6.09":{"f":"assets/areas/6_6.09.webp","x0":1.46,"z0":4.8,"w":13.36,"h":5.11},"6|6.10":{"f":"assets/areas/6_6.10.webp","x0":-12.94,"z0":-0.36,"w":8.18,"h":6.09},"6|6.11":{"f":"assets/areas/6_6.11.webp","x0":-12.99,"z0":-43.73,"w":11.48,"h":4.72},"7|6.01":{"f":"assets/areas/7_6.01.webp","x0":7.51,"z0":2.06,"w":4.89,"h":3.69},"7|6.07":{"f":"assets/areas/7_6.07.webp","x0":59.63,"z0":-40.1,"w":6.99,"h":17.65},"7|6.09":{"f":"assets/areas/7_6.09.webp","x0":1.55,"z0":4.96,"w":13.36,"h":5.11},"7|6.11":{"f":"assets/areas/7_6.11.webp","x0":-12.87,"z0":-43.84,"w":11.52,"h":4.73},"7|7.01":{"f":"assets/areas/7_7.01.webp","x0":-13.27,"z0":-23.24,"w":9.81,"h":6.79},"7|7.02":{"f":"assets/areas/7_7.02.webp","x0":-12.95,"z0":-17.27,"w":9.71,"h":6.8},"7|7.03":{"f":"assets/areas/7_7.03.webp","x0":11.75,"z0":-34.41,"w":8.73,"h":34.9},"7|7.04":{"f":"assets/areas/7_7.04.webp","x0":-13.14,"z0":-34.54,"w":16.13,"h":35.05},"7|7.05":{"f":"assets/areas/7_7.05.webp","x0":-12.89,"z0":-39.81,"w":8.78,"h":6.05},"7|7.06":{"f":"assets/areas/7_7.06.webp","x0":-4.87,"z0":-39.96,"w":25.35,"h":6.15},"7|7.07":{"f":"assets/areas/7_7.07.webp","x0":19.61,"z0":-39.89,"w":24.82,"h":5.96},"7|7.08":{"f":"assets/areas/7_7.08.webp","x0":43.59,"z0":-39.9,"w":16.81,"h":6.09},"7|7.09":{"f":"assets/areas/7_7.09.webp","x0":-5.72,"z0":-0.26,"w":25.98,"h":6.33},"7|7.10":{"f":"assets/areas/7_7.10.webp","x0":-12.89,"z0":-0.35,"w":8.18,"h":6.09},"7|7.11":{"f":"assets/areas/7_7.11.webp","x0":-20.17,"z0":-43.67,"w":7.99,"h":36.87},"8|6.01":{"f":"assets/areas/8_6.01.webp","x0":7.51,"z0":2.06,"w":5.03,"h":3.69},"8|6.07":{"f":"assets/areas/8_6.07.webp","x0":62.09,"z0":-40.09,"w":4.66,"h":17.63},"8|6.09":{"f":"assets/areas/8_6.09.webp","x0":1.54,"z0":4.95,"w":13.36,"h":5.11},"8|6.11":{"f":"assets/areas/8_6.11.webp","x0":-12.78,"z0":-44.09,"w":11.49,"h":4.78},"8|8.01":{"f":"assets/areas/8_8.01.webp","x0":-13.11,"z0":-34.54,"w":15.98,"h":35.05},"8|8.02":{"f":"assets/areas/8_8.02.webp","x0":11.63,"z0":-34.55,"w":8.73,"h":34.9},"8|8.03":{"f":"assets/areas/8_8.03.webp","x0":49.57,"z0":-32.12,"w":13.56,"h":32.38},"8|8.04":{"f":"assets/areas/8_8.04.webp","x0":-12.85,"z0":-39.96,"w":7.87,"h":6.04},"8|8.05":{"f":"assets/areas/8_8.05.webp","x0":-5.6,"z0":-39.99,"w":26.08,"h":6.33},"8|8.06":{"f":"assets/areas/8_8.06.webp","x0":19.72,"z0":-40.04,"w":43.19,"h":8.66},"8|8.07":{"f":"assets/areas/8_8.07.webp","x0":52.71,"z0":-40.05,"w":10.23,"h":6.08},"8|8.08":{"f":"assets/areas/8_8.08.webp","x0":43.76,"z0":-0.49,"w":10.76,"h":4.51},"8|8.09":{"f":"assets/areas/8_8.09.webp","x0":-5.86,"z0":-0.42,"w":26.21,"h":6.26},"8|8.10":{"f":"assets/areas/8_8.10.webp","x0":-13.07,"z0":-0.24,"w":8.18,"h":6.08},"9|6.01":{"f":"assets/areas/9_6.01.webp","x0":7.46,"z0":2.09,"w":4.89,"h":3.69},"9|6.07":{"f":"assets/areas/9_6.07.webp","x0":62.02,"z0":-40.02,"w":4.66,"h":17.64},"9|6.09":{"f":"assets/areas/9_6.09.webp","x0":1.55,"z0":4.93,"w":13.52,"h":4.98},"9|6.11":{"f":"assets/areas/9_6.11.webp","x0":-12.86,"z0":-44.0,"w":11.49,"h":4.77},"9|9.01":{"f":"assets/areas/9_9.01.webp","x0":-13.01,"z0":-39.93,"w":11.55,"h":6.15},"9|9.02":{"f":"assets/areas/9_9.02.webp","x0":-12.92,"z0":-34.66,"w":15.28,"h":5.45},"9|9.03":{"f":"assets/areas/9_9.03.webp","x0":-13.05,"z0":-30.27,"w":15.35,"h":25.97},"9|9.04":{"f":"assets/areas/9_9.04.webp","x0":-13.09,"z0":-5.23,"w":15.39,"h":5.72},"9|9.05":{"f":"assets/areas/9_9.05.webp","x0":-2.16,"z0":-39.99,"w":55.04,"h":40.42},"9|9.06":{"f":"assets/areas/9_9.06.webp","x0":51.86,"z0":-40.01,"w":11.2,"h":40.35},"9|9.07":{"f":"assets/areas/9_9.07.webp","x0":14.09,"z0":-5.71,"w":38.59,"h":6.16},"9|9.08":{"f":"assets/areas/9_9.08.webp","x0":-8.07,"z0":-0.42,"w":28.55,"h":6.21},"9|9.09":{"f":"assets/areas/9_9.09.webp","x0":-12.96,"z0":-0.35,"w":5.69,"h":6.16}};
+Object.keys(AT).forEach(function(k){TILES["a:"+k]=AT[k]});
+function tileOf(a){return a.l===11?(a.id==='11.02'?'10d1':'10d2'):String(a.l)}
+function tileShift(a){if(a.l<10)return [0,0]; if(a.l===10)return [0,L10.dz]; return a.id==='11.02'?[L10.d1[0],L10.dz+L10.d1[1]]:[L10.d2[0],L10.dz+L10.d2[1]]}
+function setUV(ge,a){var T=TILES[tileOf(a)],sh=tileShift(a),pos=ge.attributes.position,uv=new Float32Array(pos.count*2);
+  for(var i=0;i<pos.count;i++){var rx=pos.getX(i)-sh[0],rz=-pos.getY(i)-sh[1]; uv[i*2]=(rx-T.x0)/T.w; uv[i*2+1]=1-(rz-T.z0)/T.h}
+  ge.setAttribute('uv',new THREE.BufferAttribute(uv,2))}
+function l10map(x,z){
+  if(z>14.4&&x<34)return [x+L10.d1[0],z+L10.dz+L10.d1[1],1];
+  if(z>14.4&&x>37&&x<58)return null;
+  if(z>=3.0&&x>=59.5)return [x+L10.d2[0],z+L10.dz+L10.d2[1],1];
+  return [x,z+L10.dz,0]}
+AREAS=AREAS.filter(function(a){return GEO[a.l+'|'+a.id]});
+if(!AREAS.some(function(a){return a.l===1&&a.id==='0.01'}))A(1,'0.01','Tronco del ascensor',PURP,[0,0,1,1],['D01E01 Ascensor','Recorre todos los niveles'],null,{tr:true});
+AREAS.forEach(function(a){var g=GEO[a.l+'|'+a.id]; a.rings=g.g; a.c=g.c; if(a.l===1&&a.id==='1.14')a.tr=false});
+VOIDS.forEach(function(v){AREAS.push({l:v.l,id:v.id,name:VNAME[v.id]||('Hueco '+v.id),c:'#6fa8dc',rings:v.g,rooms:[],p:null,v:true})});
+/* utilidades de polígonos */
+function pip(x,z,r){var c=false,n=r.length;for(var i=0,j=n-1;i<n;j=i++){var a=r[i],b=r[j];if((a[1]>z)!==(b[1]>z)&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+function dseg(x,z,a,b){var dx=b[0]-a[0],dz=b[1]-a[1],L=dx*dx+dz*dz,t=L?((x-a[0])*dx+(z-a[1])*dz)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(x-(a[0]+t*dx),z-(a[1]+t*dz))}
+function ringDist(x,z,r){var m=1e9;for(var i=0;i<r.length;i++){var d=dseg(x,z,r[i],r[(i+1)%r.length]);if(d<m)m=d}return m}
+function ringM2(r){var s=0;for(var i=0;i<r.length;i++){var a=r[i],b=r[(i+1)%r.length];s+=a[0]*b[1]-b[0]*a[1]}return Math.abs(s)/2}
+AREAS.forEach(function(a){
+  var edges=[];
+  a.rings.forEach(function(r,i){for(var k=0;k<r.length;k++){var p=r[k],q=r[(k+1)%r.length],mx_=(p[0]+q[0])/2,mz_=(p[1]+q[1])/2,drop=false;
+    a.rings.forEach(function(o,j){if(j!==i&&(pip(mx_,mz_,o)||ringDist(mx_,mz_,o)<0.15))drop=true});
+    if(!drop)edges.push([p,q])}});
+  a.edges=edges;
+  var minx=1e9,maxx=-1e9,minz=1e9,maxz=-1e9,big=a.rings[0];
+  a.rings.forEach(function(r){if(ringM2(r)>ringM2(big))big=r;r.forEach(function(p){minx=Math.min(minx,p[0]);maxx=Math.max(maxx,p[0]);minz=Math.min(minz,p[1]);maxz=Math.max(maxz,p[1])})});
+  a.bb=[minx,minz,maxx,maxz]; a.big=big; a.m2=Math.round(a.rings.reduce(function(s,r){return s+ringM2(r)},0));
+  var hp=HP[a.l+'|'+a.id], L=LEVELS[a.l]; if(!hp||hp<L.elev)hp=L.elev+(a.l===0?0.3:0.01);
+  a.hp=hp; a.fy=hp-21.55;
+});
+function inA(a,x,z,m){
+  var ok=a.rings.some(function(r){return pip(x,z,r)}); if(!ok)return false;
+  for(var i=0;i<a.edges.length;i++)if(dseg(x,z,a.edges[i][0],a.edges[i][1])<m)return false;
+  return true;
+}
+function anchor(a){
+  if(a.anc)return a.anc;
+  var best=null,bd=-1;
+  for(var x=a.bb[0];x<=a.bb[2];x+=1)for(var z=a.bb[1];z<=a.bb[3];z+=1){
+    if(!a.rings.some(function(r){return pip(x,z,r)}))continue;
+    var d=1e9;for(var i=0;i<a.edges.length;i++){var t=dseg(x,z,a.edges[i][0],a.edges[i][1]);if(t<d)d=t}
+    if(d>bd){bd=d;best=[x,z]}
+  }
+  a.anc=best||[(a.bb[0]+a.bb[2])/2,(a.bb[1]+a.bb[3])/2]; return a.anc;
+}
+function gridPts(a){
+  if(a.grid)return a.grid; var o=[];
+  for(var x=a.bb[0];x<=a.bb[2];x+=1)for(var z=a.bb[1];z<=a.bb[3];z+=1)if(inA(a,x,z,0.6))o.push([x,z]);
+  if(!o.length)o.push(anchor(a)); a.grid=o; return o;
+}
+/* ---------- Escena ---------- */
+var cv=document.getElementById('cv'), stage=document.getElementById('stage');
+var renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+var scene=new THREE.Scene();
+var camera=new THREE.PerspectiveCamera(50,1,0.2,1200);
+scene.add(new THREE.HemisphereLight(0xffffff,0x6c7a88,0.62));
+var sun=new THREE.DirectionalLight(0xffffff,0.5); sun.position.set(-60,120,80); scene.add(sun);
+var lineMats=[], gridHelper;
+function themeColors(){
+  var cs=getComputedStyle(document.documentElement);
+  scene.background=new THREE.Color(cs.getPropertyValue('--scene').trim()||'#dfe6ec');
+  var edge=cs.getPropertyValue('--edge').trim()||'#233645';
+  lineMats.forEach(function(m){m.color.set(edge)});
+  if(gridHelper)gridHelper.material.color.set(cs.getPropertyValue('--grid').trim()||'#b9c6d1');
+}
+gridHelper=new THREE.GridHelper(320,64,0x888888,0x888888); gridHelper.position.set(28,-4,-12); scene.add(gridHelper);
+gridHelper.material.transparent=true; gridHelper.material.opacity=.55;
+var levelGroups=[]; LEVELS.forEach(function(){var g=new THREE.Group(); scene.add(g); levelGroups.push(g)});
+var propMat=new THREE.MeshLambertMaterial({color:0x7f93a8}), propMat2=new THREE.MeshLambertMaterial({color:0xaab7c4});
+var PROPS=[];
+function box(g,a,w,h,d,x,y,z,m){if(!inA(a,x,z,0.5)||!inA(a,x-w/2,z-d/2,0.2)||!inA(a,x+w/2,z+d/2,0.2))return; var o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m||propMat); o.position.set(x,y,z); o.userData.lv=a.l; PROPS.push(o); g.add(o)}
+function cyl(g,a,r,h,x,y,z){if(!inA(a,x,z,r+0.3))return; var o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,20),propMat2); o.position.set(x,y,z); o.userData.lv=a.l; PROPS.push(o); g.add(o)}
+function addProps(g,a,y){
+  var r=a.big,mnx=1e9,mxx=-1e9,mnz=1e9,mxz=-1e9; r.forEach(function(p){mnx=Math.min(mnx,p[0]);mxx=Math.max(mxx,p[0]);mnz=Math.min(mnz,p[1]);mxz=Math.max(mxz,p[1])});
+  var x1=mnx,z1=mnz,w=mxx-mnx,d=mxz-mnz,i,j,t=a.p;
+  if(t==='conv'){for(i=0;i<2;i++)for(j=0;j<4;j++)box(g,a,w*0.22,3.2,d*0.14,x1+w*(0.28+0.44*i),y+1.6,z1+d*(0.14+0.24*j))}
+  else if(t==='tx')box(g,a,w*0.6,3.6,d*0.4,x1+w*0.5,y+1.8,z1+d*0.5);
+  else if(t==='gis'){for(j=0;j<5;j++)box(g,a,w*0.6,2.2,Math.min(2,d*0.05),x1+w*0.5,y+1.1,z1+d*(0.12+0.19*j))}
+  else if(t==='tank'){for(j=0;j<3;j++)cyl(g,a,Math.min(2.2,Math.min(w,d)*0.1),3,x1+w*0.5,y+1.5,z1+d*(0.2+0.3*j))}
+  else if(t==='cab'){for(j=0;j<2;j++)for(i=0;i<7;i++)box(g,a,Math.min(1,w*0.08),2.2,0.7,x1+w*(0.14+0.12*i),y+1.1,z1+d*(0.3+0.4*j))}
+  else if(t==='ahu')box(g,a,w*0.55,3,d*0.3,x1+w*0.5,y+1.5,z1+d*0.5);
+  else if(t==='pump'){for(j=0;j<4;j++){cyl(g,a,1,1.6,x1+w*0.3,y+0.8,z1+d*(0.15+0.2*j));cyl(g,a,1,1.6,x1+w*0.7,y+0.8,z1+d*(0.15+0.2*j))}}
+}
+function ringShape(r){var s=new THREE.Shape(); r.forEach(function(p,i){if(i===0)s.moveTo(p[0],-p[1]);else s.lineTo(p[0],-p[1])}); s.closePath(); return s}
+function wall(g,mat,p,q,y,h){
+  var dx=q[0]-p[0],dz=q[1]-p[1],L=Math.hypot(dx,dz); if(L<0.3)return;
+  var m=new THREE.Mesh(new THREE.BoxGeometry(L,h,0.25),mat); m.position.set((p[0]+q[0])/2,y+h/2,(p[1]+q[1])/2); m.rotation.y=-Math.atan2(dz,dx); g.add(m);
+}
+var seenEdges={};
+AREAS.forEach(function(a,idx){
+  var L=LEVELS[a.l], g=levelGroups[a.l], base=L.elev-21.55;
+  if(a.v){
+    var vh=Math.max(2.4,L.h-0.3);
+    a.rings.forEach(function(r){
+      var vm=new THREE.MeshBasicMaterial({color:0x6fa8dc,transparent:true,opacity:0.1,depthWrite:false,side:THREE.DoubleSide});
+      var ge=new THREE.ExtrudeGeometry(ringShape(r),{depth:vh,bevelEnabled:false});
+      var o=new THREE.Mesh(ge,vm); o.rotation.x=-Math.PI/2; o.position.y=base; g.add(o);
+      var lm=new THREE.LineBasicMaterial({color:0x6fa8dc,transparent:true,opacity:0.55}); lineMats.push(lm);
+      var ln=new THREE.LineSegments(new THREE.EdgesGeometry(ge),lm); ln.rotation.x=-Math.PI/2; ln.position.y=base; g.add(ln);
+    }); return;
+  }
+  a.cBase=new THREE.Color(a.c).getHex(); a.floorMat=new THREE.MeshLambertMaterial({color:new THREE.Color(a.c),transparent:true,opacity:0.95,side:THREE.DoubleSide});
+  a.wallMat=new THREE.MeshLambertMaterial({color:new THREE.Color(a.c),transparent:true,opacity:0.22,depthWrite:false});
+  a.floors=[];
+  var top=a.fy+idx*0.0015, bse=(a.l===10&&a.id.indexOf('11.')===0)?top-0.35:base-0.3, wh=Math.max(2.3,L.h-0.3-(a.hp-L.elev));
+  a.rings.forEach(function(r){
+    var ge=new THREE.ExtrudeGeometry(ringShape(r),{depth:top-bse,bevelEnabled:false}); setUV(ge,a);
+    var f=new THREE.Mesh(ge,a.floorMat); f.rotation.x=-Math.PI/2; f.position.y=bse; f.userData.area=a; g.add(f); a.floors.push(f);
+    var lm=new THREE.LineBasicMaterial({color:0x233645,transparent:true,opacity:0.7}); lineMats.push(lm);
+    var ln=new THREE.LineSegments(new THREE.EdgesGeometry(ge),lm); ln.rotation.x=-Math.PI/2; ln.position.y=bse; g.add(ln);
+  });
+  a.edges.forEach(function(e){
+    var k=a.l+':'+[Math.round(e[0][0]*3),Math.round(e[0][1]*3),Math.round(e[1][0]*3),Math.round(e[1][1]*3)].join(',');
+    var k2=a.l+':'+[Math.round(e[1][0]*3),Math.round(e[1][1]*3),Math.round(e[0][0]*3),Math.round(e[0][1]*3)].join(',');
+    if(seenEdges[k]||seenEdges[k2])return; seenEdges[k]=1; wall(g,a.wallMat,e[0],e[1],top,wh);
+  });
+  if(a.p)addProps(g,a,top);
+});
+
+/* ---------- Paredes, puertas y persianas (vectores del plano) ---------- */
+var WD={"0":{"w":[[10.57,-40.77,13.44,-40.77],[18.37,-40.77,21.28,-40.77],[-12.57,-39.57,66.25,-39.57],[1.35,-37.69,4.76,-37.69],[1.39,-37.5,4.84,-37.5],[38.04,-37.25,40.89,-37.25],[41.04,-37.25,43.89,-37.25],[41.04,-37.06,43.89,-37.06],[49.74,-37.06,52.36,-37.06],[1.68,-36.87,4.76,-36.87],[6.64,-36.62,9.26,-36.62],[62.65,-36.62,65.98,-36.62],[2.08,-36.24,4.84,-36.24],[17.07,-36.05,22.91,-36.05],[23.06,-36.05,31.9,-36.05],[32.05,-36.05,37.89,-36.05],[44.04,-36.05,46.88,-36.05],[47.03,-36.05,52.88,-36.05],[-12.59,-34.23,62.64,-34.23],[-5.31,-31.91,-2.46,-31.91],[0.08,-31.91,9.62,-31.91],[15.76,-31.91,19.93,-31.91],[20.85,-31.91,24.29,-31.91],[27.53,-31.91,30.53,-31.91],[30.68,-31.91,39.27,-31.91],[39.42,-31.91,43.26,-31.91],[43.97,-31.91,46.66,-31.91],[46.96,-31.91,55.27,-31.91],[55.42,-31.91,60.07,-31.91],[62.65,-31.91,65.98,-31.91],[-5.31,-31.72,-2.46,-31.72],[0.08,-31.72,8.49,-31.72],[15.76,-31.72,19.93,-31.72],[20.85,-31.72,24.29,-31.72],[27.53,-31.72,30.53,-31.72],[30.68,-31.72,39.27,-31.72],[39.42,-31.72,43.26,-31.72],[43.97,-31.72,46.66,-31.72],[46.96,-31.72,55.27,-31.72],[55.42,-31.72,60.07,-31.72],[-5.31,-30.21,-2.46,-30.21],[0.06,-30.21,8.49,-30.21],[17.26,-30.21,19.95,-30.21],[20.85,-30.21,24.29,-30.21],[27.53,-30.21,30.53,-30.21],[30.68,-30.21,39.27,-30.21],[39.42,-30.21,43.26,-30.21],[43.97,-30.21,46.66,-30.21],[46.96,-30.21,55.27,-30.21],[-5.31,-30.02,-2.46,-30.02],[0.06,-30.02,7.2,-30.02],[17.26,-30.02,19.95,-30.02],[20.85,-30.02,24.29,-30.02],[27.53,-30.02,30.53,-30.02],[30.68,-30.02,39.27,-30.02],[39.42,-30.02,43.26,-30.02],[43.97,-30.02,46.66,-30.02],[46.96,-30.02,55.27,-30.02],[55.42,-30.02,60.07,-30.02],[62.65,-30.02,65.98,-30.02],[-5.31,-27.7,-2.46,-27.7],[0.06,-27.7,7.2,-27.7],[7.31,-27.7,16.99,-27.7],[20.85,-27.7,24.29,-27.7],[27.53,-27.7,30.53,-27.7],[30.68,-27.7,39.27,-27.7],[39.42,-27.7,43.26,-27.7],[43.97,-27.7,46.66,-27.7],[46.96,-27.7,55.27,-27.7],[55.42,-27.7,60.07,-27.7],[62.65,-27.7,65.99,-27.7],[-5.31,-27.51,-2.46,-27.51],[0.06,-27.51,7.29,-27.51],[20.85,-27.51,24.29,-27.51],[27.53,-27.51,30.53,-27.51],[30.68,-27.51,39.27,-27.51],[39.42,-27.51,43.26,-27.51],[43.97,-27.51,46.66,-27.51],[46.96,-27.51,55.27,-27.51],[55.42,-27.51,60.07,-27.51],[62.65,-27.51,65.99,-27.51],[-12.14,-25.31,-2.94,-25.31],[0.04,-25.31,5.35,-25.31],[6.87,-25.31,55.82,-25.31],[57.28,-25.31,62.64,-25.31],[52.11,-24.3,54.74,-24.3],[-5.31,-22.92,-2.46,-22.92],[4.91,-22.92,10.92,-22.92],[11.07,-22.92,13.67,-22.92],[14.5,-22.92,19.98,-22.92],[20.85,-22.92,46.66,-22.92],[46.96,-22.92,55.27,-22.92],[62.65,-22.92,66.25,-22.92],[-5.31,-22.73,-2.46,-22.73],[4.9,-22.73,10.92,-22.73],[11.07,-22.73,13.67,-22.73],[14.5,-22.73,19.98,-22.73],[20.85,-22.73,46.66,-22.73],[46.96,-22.73,55.27,-22.73],[-5.31,-21.1,-2.46,-21.1],[4.91,-21.1,10.92,-21.1],[11.07,-21.1,13.67,-21.1],[14.5,-21.1,46.66,-21.1],[46.96,-21.1,55.27,-21.1],[-5.31,-20.91,-2.46,-20.91],[4.91,-20.91,10.92,-20.91],[11.07,-20.91,13.67,-20.91],[14.5,-20.91,46.66,-20.91],[46.96,-20.91,55.27,-20.91],[-5.31,-18.71,-2.46,-18.71],[4.91,-18.71,10.92,-18.71],[11.07,-18.71,13.67,-18.71],[14.5,-18.71,19.98,-18.71],[20.85,-18.71,46.66,-18.71],[46.96,-18.71,55.27,-18.71],[-5.31,-18.52,-2.46,-18.52],[7.31,-18.52,19.98,-18.52],[20.85,-18.52,46.66,-18.52],[46.96,-18.52,55.27,-18.52],[-12.14,-16.32,-2.94,-16.32],[-2.85,-16.32,23.23,-16.32],[23.48,-16.32,30.28,-16.32],[30.68,-16.32,55.82,-16.32],[57.28,-16.32,62.22,-16.32],[-5.31,-13.94,-2.46,-13.94],[4.91,-13.94,19.98,-13.94],[20.85,-13.94,46.66,-13.94],[46.96,-13.94,55.27,-13.94],[-5.31,-13.75,-2.46,-13.75],[4.91,-13.75,19.98,-13.75],[20.46,-13.75,46.66,-13.75],[46.96,-13.75,55.27,-13.75],[-5.31,-12.11,-2.46,-12.11],[-2.31,-12.11,46.66,-12.11],[46.96,-12.11,55.27,-12.11],[-5.31,-11.93,-2.46,-11.93],[-2.31,-11.93,46.66,-11.93],[46.96,-11.93,55.27,-11.93],[-5.31,-9.73,-2.46,-9.73],[0.04,-9.73,19.98,-9.73],[20.46,-9.73,46.66,-9.73],[46.96,-9.73,55.27,-9.73],[-5.31,-9.54,-2.46,-9.54],[0.04,-9.54,15.62,-9.54],[15.77,-9.54,19.98,-9.54],[20.46,-9.54,24.29,-9.54],[27.53,-9.54,30.53,-9.54],[30.68,-9.54,46.66,-9.54],[46.96,-9.54,55.27,-9.54],[-12.14,-7.21,5.35,-7.21],[6.87,-7.21,14.98,-7.21],[15.88,-7.21,22.5,-7.21],[22.74,-7.21,30.28,-7.21],[30.68,-7.21,62.22,-7.21],[-5.31,-4.89,-2.46,-4.89],[0.04,-4.89,7.3,-4.89],[17.0,-4.89,19.97,-4.89],[20.85,-4.89,24.29,-4.89],[27.53,-4.89,30.53,-4.89],[30.68,-4.89,46.66,-4.89],[46.96,-4.89,55.27,-4.89],[-5.31,-2.56,-2.46,-2.56],[0.08,-2.56,9.62,-2.56],[15.77,-2.56,19.93,-2.56],[20.85,-2.56,24.29,-2.56],[27.53,-2.56,30.53,-2.56],[30.68,-2.56,46.66,-2.56],[46.96,-2.56,55.27,-2.56],[-5.31,-2.38,-2.46,-2.38],[0.08,-2.38,4.9,-2.38],[15.77,-2.38,19.93,-2.38],[20.85,-2.38,24.29,-2.38],[27.53,-2.38,30.53,-2.38],[30.68,-2.38,46.66,-2.38],[46.96,-2.38,55.27,-2.38],[4.0,-1.56,6.62,-1.56],[-12.59,-0.05,6.33,-0.05],[6.6,-0.05,62.67,-0.05],[17.07,1.65,22.91,1.65],[23.06,1.65,31.9,1.65],[32.05,1.65,35.9,1.65],[17.07,1.83,19.91,1.83],[20.06,1.83,22.91,1.83],[23.06,1.83,25.91,1.83],[26.06,1.83,28.9,1.83],[29.05,1.83,31.9,1.83],[32.05,1.83,34.9,1.83],[7.91,2.27,12.09,2.27],[2.43,2.46,5.05,2.46],[-3.56,3.22,-0.16,3.22],[-3.22,3.91,-0.22,3.91],[-2.82,4.47,-0.16,4.47],[-12.57,5.35,36.16,5.35],[-12.55,-39.6,-12.55,5.67],[-10.23,-27.51,-10.23,-22.86],[-10.23,-18.52,-10.23,-13.88],[-10.23,-9.53,-10.23,-4.89],[-7.84,-27.51,-7.84,-22.86],[-7.84,-18.52,-7.84,-13.88],[-7.84,-9.53,-7.84,-4.89],[-5.45,-27.51,-5.45,-22.86],[-5.45,-18.52,-5.45,-13.88],[-5.45,-9.53,-5.45,-4.89],[-5.27,-27.53,-5.27,-22.92],[-5.27,-18.54,-5.27,-13.93],[-2.44,-27.53,-2.44,-22.86],[-2.44,-18.54,-2.44,-13.88],[-2.44,-9.55,-2.44,-4.89],[-2.25,-18.54,-2.25,-13.93],[0.01,-35.17,0.01,-25.25],[0.01,-24.89,0.01,-9.79],[0.01,-7.65,0.01,0.97],[2.4,-33.75,2.4,-27.15],[2.4,-13.79,2.4,-9.17],[2.4,-7.2,2.4,-0.02],[4.79,-33.76,4.79,-27.15],[4.79,-25.18,4.79,-9.17],[4.79,-7.2,4.79,-4.11],[4.79,-3.11,4.79,0.9],[7.18,-34.2,7.18,-9.17],[7.18,-7.22,7.18,0.8],[7.93,2.38,7.93,5.37],[9.63,-27.58,9.63,-23.24],[9.63,-22.99,9.63,-9.17],[12.01,-27.58,12.01,-9.17],[12.01,-0.0,12.01,5.37],[14.4,-39.57,14.4,-34.2],[14.4,-27.58,14.4,-7.71],[14.4,2.46,14.4,5.11],[14.59,1.86,14.59,5.11],[15.6,-29.9,15.6,-25.34],[15.6,-9.53,15.6,-4.97],[15.78,-29.9,15.78,-25.34],[15.78,-9.53,15.78,-4.96],[16.92,-39.31,16.92,-34.22],[16.92,-33.76,16.92,-7.71],[16.92,-7.2,16.92,-0.44],[16.92,1.86,16.92,5.11],[19.87,-39.31,19.87,-36.05],[19.87,-34.18,19.87,-9.17],[19.87,-7.65,19.87,0.97],[19.87,1.86,19.87,5.11],[20.06,-39.31,20.06,-36.05],[20.06,1.86,20.06,5.11],[22.88,-39.31,22.88,-36.05],[22.88,-33.75,22.88,-0.44],[22.88,1.86,22.88,5.11],[23.07,-39.31,23.07,-36.05],[23.07,1.86,23.07,5.11],[24.27,-9.53,24.27,-4.89],[24.46,-9.53,24.46,-4.89],[25.9,-39.31,25.9,-36.05],[25.9,-33.75,25.9,-0.44],[25.9,1.86,25.9,5.11],[27.41,-9.53,27.41,-4.89],[28.92,-39.31,28.92,-36.05],[28.92,-33.75,28.92,-0.44],[28.92,1.86,28.92,5.11],[30.55,-9.53,30.55,-4.89],[31.87,-39.31,31.87,-36.05],[31.87,-33.75,31.87,-0.44],[31.87,1.86,31.87,5.11],[32.06,-39.31,32.06,-36.05],[32.06,1.86,32.06,5.11],[34.89,-39.31,34.89,-36.05],[34.89,-34.18,34.89,-0.02],[34.89,1.86,34.89,5.11],[35.07,-39.31,35.07,-36.05],[35.07,1.86,35.07,5.11],[36.14,0.04,36.14,5.38],[37.9,-39.31,37.9,-34.22],[37.9,-33.75,37.9,-0.44],[40.92,-33.75,40.92,-0.44],[43.87,-33.75,43.87,-0.44],[44.06,-39.31,44.06,-36.05],[46.89,-39.31,46.89,-36.05],[46.89,-33.75,46.89,-0.44],[49.9,-39.31,49.9,-36.05],[49.9,-34.18,49.9,0.97],[52.86,-39.31,52.86,-34.22],[52.86,-33.77,52.86,-0.44],[53.05,-39.31,53.05,-36.65],[55.24,-39.31,55.24,-36.65],[55.24,-27.51,55.24,-22.86],[55.24,-18.52,55.24,-13.88],[55.24,-9.53,55.24,-4.89],[55.43,-39.31,55.43,-36.65],[55.43,-27.51,55.43,-22.86],[55.43,-18.52,55.43,-13.88],[55.43,-9.53,55.43,-4.89],[57.7,-39.31,57.7,-36.65],[57.7,-30.09,57.7,-27.12],[57.7,-18.52,57.7,-13.88],[57.7,-9.53,57.7,-4.89],[60.08,-27.51,60.08,-22.86],[60.08,-18.52,60.08,-13.88],[60.08,-9.53,60.08,-4.89],[60.27,-27.53,60.27,-22.92],[60.27,-18.54,60.27,-13.93],[62.66,-36.67,62.66,-0.02],[62.85,-19.04,62.85,-16.51],[64.1,-31.7,64.1,-27.73],[64.8,-30.88,64.8,-28.04],[65.36,-31.7,65.36,-28.44],[66.24,-39.57,66.24,-22.79]],"d":[[20.39,-31.91,"h",0.91,"door"],[20.39,-31.72,"h",0.91,"door"],[20.4,-30.21,"h",0.9,"door"],[20.4,-30.02,"h",0.9,"door"],[56.55,-25.31,"h",1.46,"door"],[14.08,-22.92,"h",0.83,"door"],[20.42,-22.92,"h",0.87,"door"],[14.08,-22.73,"h",0.83,"door"],[20.42,-22.73,"h",0.87,"door"],[14.08,-21.1,"h",0.83,"door"],[14.08,-20.91,"h",0.83,"door"],[14.08,-18.71,"h",0.83,"door"],[20.42,-18.71,"h",0.87,"door"],[20.42,-18.52,"h",0.87,"door"],[56.55,-16.32,"h",1.46,"door"],[20.42,-13.94,"h",0.87,"door"],[15.43,-7.21,"h",0.9,"door"],[20.41,-4.89,"h",0.87,"door"],[20.39,-2.56,"h",0.91,"door"],[20.39,-2.38,"h",0.91,"door"],[4.79,-3.61,"v",1.0,"door"],[19.87,1.41,"v",0.89,"door"],[25.9,-34.9,"v",2.3,"door"],[25.9,0.71,"v",2.3,"door"],[28.92,-34.9,"v",2.3,"door"],[28.92,0.71,"v",2.3,"door"]],"l":[[-12.55,5.67,"v",2.01],[66.24,-22.79,"v",2.01]]},"1":{"w":[[51.15,-46.17,68.03,-46.17],[51.64,-45.61,55.64,-45.61],[-19.16,-44.35,-2.02,-44.35],[1.99,-44.35,51.15,-44.35],[-12.58,-43.47,-4.78,-43.47],[-11.51,-42.59,-6.98,-42.59],[9.08,-42.59,13.91,-42.59],[18.25,-41.96,21.73,-41.96],[51.64,-41.58,55.64,-41.58],[-11.51,-40.96,-8.53,-40.96],[18.54,-40.58,21.72,-40.58],[18.25,-39.89,21.73,-39.89],[-12.58,-39.57,66.25,-39.57],[-10.69,-37.69,-8.15,-37.69],[1.48,-37.69,4.8,-37.69],[1.36,-36.87,3.99,-36.87],[17.83,-36.87,20.45,-36.87],[1.48,-36.05,4.8,-36.05],[-10.69,-34.86,-8.15,-34.86],[-10.98,-34.17,-7.01,-34.17],[-5.81,-34.17,7.43,-34.17],[9.54,-34.17,62.65,-34.17],[13.29,-32.85,15.92,-32.85],[25.83,-32.85,31.22,-32.85],[38.33,-32.6,40.95,-32.6],[10.12,-31.09,15.17,-31.09],[-19.04,-30.9,-15.04,-30.9],[49.07,-29.77,51.69,-29.77],[6.79,-27.7,17.01,-27.7],[-19.04,-27.01,-15.04,-27.01],[-12.57,-27.01,-10.02,-27.01],[-9.12,-27.01,-1.68,-27.01],[62.65,-25.25,66.24,-25.25],[62.65,-23.49,66.24,-23.49],[-19.16,-22.86,-14.37,-22.86],[62.65,-22.86,66.25,-22.86],[64.43,-20.97,68.03,-20.97],[26.91,-20.66,29.53,-20.66],[26.89,-11.17,29.51,-11.17],[6.79,-6.65,17.01,-6.65],[19.99,-6.15,22.62,-6.15],[-19.16,-4.83,-14.37,-4.83],[-19.03,-4.64,-15.04,-4.64],[10.12,-3.13,15.17,-3.13],[-12.59,0.01,-8.07,0.01],[-5.53,0.01,5.06,0.01],[7.16,0.01,62.67,0.01],[-19.03,1.9,-15.04,1.9],[-18.48,2.4,-13.49,2.4],[7.91,2.4,12.09,2.4],[-3.44,2.97,-0.13,2.97],[32.48,2.97,36.02,2.97],[-3.32,3.91,-0.51,3.91],[-3.44,4.66,-0.13,4.66],[-12.58,5.35,36.17,5.35],[11.81,6.04,14.38,6.04],[8.43,6.86,12.76,6.86],[7.94,7.18,11.59,7.18],[14.66,7.18,47.55,7.18],[7.66,8.56,12.76,8.56],[-18.48,9.12,-13.49,9.12],[11.81,9.37,14.38,9.37],[-19.16,9.56,14.66,9.56],[-19.15,-44.36,-19.15,-22.78],[-19.15,-4.8,-19.15,9.57],[-18.46,2.39,-18.46,9.1],[-15.07,-30.89,-15.07,-26.9],[-15.07,-4.62,-15.07,1.88],[-14.38,-22.78,-14.38,-4.8],[-13.5,2.39,-13.5,9.1],[-12.55,-43.47,-12.55,5.38],[-12.11,-29.97,-12.11,-25.24],[-9.1,-32.52,-9.1,-26.99],[-0.11,-34.18,-0.11,-0.02],[5.17,-13.87,5.17,-1.11],[5.42,-32.81,5.42,-22.65],[6.8,-27.64,6.8,-6.57],[7.93,2.38,7.93,5.37],[9.12,-42.57,9.12,-39.58],[9.81,-30.78,9.81,-27.99],[9.81,-6.21,9.81,-3.42],[12.08,1.63,12.08,5.37],[14.4,6.1,14.4,9.33],[14.65,5.38,14.65,9.59],[15.91,-30.78,15.91,-27.99],[15.91,-6.21,15.91,-3.42],[16.85,-27.56,16.85,-6.64],[17.04,-27.64,17.04,-6.57],[19.99,-34.18,19.99,-29.15],[19.99,-27.95,19.99,-20.84],[19.99,-18.74,19.99,-9.46],[19.99,-7.36,19.99,-0.02],[22.44,-23.86,22.44,-19.7],[22.44,-18.1,22.44,-13.92],[22.44,-12.27,22.44,-8.0],[22.44,-6.08,22.44,-2.16],[22.63,-6.15,22.63,-2.24],[23.64,-19.77,23.64,-13.42],[24.77,-34.18,24.77,-29.38],[24.77,-28.18,24.77,-4.06],[24.77,-2.87,24.77,-0.02],[36.14,-0.0,36.14,5.38],[47.58,-0.0,47.58,7.17],[51.66,-45.59,51.66,-41.59],[55.62,-45.59,55.62,-41.59],[62.66,-39.58,62.66,-34.2],[62.66,-32.29,62.66,-0.02],[63.41,-29.76,63.41,-26.7],[63.41,-19.76,63.41,-17.08],[64.8,-30.85,64.8,-26.7],[66.24,-39.58,66.24,-22.79],[68.0,-46.17,68.0,-38.37],[68.0,-29.99,68.0,-21.0],[68.63,-36.58,68.63,-31.78],[70.45,-38.37,70.45,-29.99]],"d":[[-6.41,-34.17,"h",1.2,"door"],[8.49,-34.17,"h",2.11,"door"],[-13.81,-27.01,"h",2.48,"door"],[-9.57,-27.01,"h",0.9,"door"],[-6.8,0.01,"h",2.54,"door"],[6.11,0.01,"h",2.1,"door"],[13.12,7.18,"h",3.07,"door"],[19.99,-28.55,"v",1.2,"door"],[19.99,-19.79,"v",2.1,"door"],[19.99,-8.41,"v",2.1,"door"],[22.44,-18.9,"v",1.6,"door"],[22.44,-13.09,"v",1.66,"door"],[22.44,-7.04,"v",1.92,"door"],[24.77,-28.78,"v",1.2,"door"],[24.77,-3.47,"v",1.2,"door"],[62.66,-33.25,"v",1.91,"door"]],"l":[[-19.16,-4.83,"h",2.01]]},"2":{"w":[[-10.5,-42.46,-6.02,-42.46],[-10.75,-40.96,-6.02,-40.96],[-7.85,-40.2,-4.81,-40.2],[-12.57,-39.57,-3.86,-39.57],[-2.66,-39.57,14.49,-39.57],[5.35,-38.88,8.67,-38.88],[-2.07,-37.81,0.55,-37.81],[47.01,-37.19,55.31,-37.19],[5.35,-36.62,8.67,-36.62],[-12.59,-34.17,-4.98,-34.17],[-2.79,-34.17,0.86,-34.17],[2.06,-34.17,9.99,-34.17],[24.8,-32.79,28.1,-32.79],[10.13,-32.54,15.53,-32.54],[10.13,-27.95,15.53,-27.95],[62.65,-23.49,65.5,-23.49],[2.44,-14.13,5.06,-14.13],[2.53,-6.4,5.15,-6.4],[10.12,-6.4,15.52,-6.4],[10.12,-1.68,15.52,-1.68],[-12.59,0.01,-4.94,0.01],[-2.84,0.01,0.92,0.01],[2.11,0.01,20.29,0.01],[3.6,1.14,6.23,1.14],[-12.58,5.35,3.08,5.35],[4.28,5.35,25.09,5.35],[4.92,6.04,8.58,6.04],[6.49,6.86,12.0,6.86],[6.49,8.56,11.7,8.56],[4.92,9.37,8.36,9.37],[11.81,9.37,14.42,9.37],[-12.55,-43.25,-12.55,-40.26],[-4.83,-43.49,-4.83,-39.58],[0.52,-22.69,0.52,-14.6],[1.33,-22.69,1.33,-14.6],[4.91,-23.53,4.91,-11.41],[4.91,5.38,4.91,9.58],[9.81,-32.22,9.81,-28.24],[9.81,-5.97,9.81,-1.99],[14.4,6.06,14.4,9.38],[15.85,-32.22,15.85,-28.24],[15.85,-5.97,15.85,-1.99],[23.89,0.72,23.89,3.74],[24.83,0.72,24.83,3.74],[26.4,0.72,26.4,3.74],[27.35,0.72,27.35,3.74],[28.85,0.72,28.85,3.74],[29.86,0.72,29.86,3.74],[60.08,-39.3,60.08,-35.92],[63.41,-32.09,63.41,-27.89],[64.8,-32.09,64.8,-27.55]],"d":[[-3.26,-39.57,"h",1.2,"door"],[-3.89,-34.17,"h",2.2,"door"],[1.46,-34.17,"h",1.2,"door"],[-3.89,0.01,"h",2.1,"door"],[1.51,0.01,"h",1.2,"door"],[3.68,5.35,"h",1.2,"door"],[10.08,9.37,"h",3.46,"door"]],"l":[]},"3":{"w":[[9.68,-45.54,20.01,-45.54],[11.08,-44.66,19.09,-44.66],[-12.58,-43.47,-1.77,-43.47],[-10.36,-42.46,-5.83,-42.46],[-10.05,-40.96,-5.83,-40.96],[11.08,-40.45,19.09,-40.45],[-7.34,-40.2,-4.81,-40.2],[-12.57,-39.57,9.88,-39.57],[10.8,-39.57,13.68,-39.57],[14.18,-39.57,66.25,-39.57],[5.35,-38.88,8.67,-38.88],[-10.13,-38.63,-5.5,-38.63],[5.35,-36.62,8.67,-36.62],[-10.38,-34.23,5.51,-34.23],[6.7,-34.23,11.43,-34.23],[13.83,-34.23,62.64,-34.23],[43.62,-31.47,46.24,-31.47],[-9.57,-31.15,-3.08,-31.15],[-9.57,-30.97,-3.08,-30.97],[0.03,-25.44,5.63,-25.44],[62.65,-23.49,66.24,-23.49],[62.65,-22.8,66.25,-22.8],[9.87,-17.2,12.49,-17.2],[-10.17,-13.62,-7.55,-13.62],[0.03,-10.61,5.63,-10.61],[2.99,-8.47,7.77,-8.47],[-9.57,-3.25,-3.08,-3.25],[11.18,-1.68,13.8,-1.68],[-10.38,0.01,-1.98,0.01],[1.14,0.01,62.67,0.01],[7.91,2.4,12.09,2.4],[2.44,3.47,5.06,3.47],[13.96,3.47,18.19,3.47],[-10.18,4.22,-5.42,4.22],[-12.58,5.35,3.08,5.35],[4.28,5.35,36.16,5.35],[11.76,6.04,14.38,6.04],[6.83,6.86,11.28,6.86],[6.83,8.56,11.62,8.56],[11.76,9.37,14.38,9.37],[1.91,9.56,14.66,9.56],[-12.55,-43.47,-12.55,5.37],[-11.74,-37.73,-11.74,-34.75],[-11.74,-0.01,-11.74,5.37],[-11.55,-37.84,-11.55,-34.47],[-10.1,-36.94,-10.1,-34.19],[-9.66,-34.01,-9.66,-0.19],[-8.66,-37.67,-8.66,-34.19],[-5.58,-39.57,-5.58,-34.19],[-5.39,-39.57,-5.39,-34.19],[-5.39,0.01,-5.39,2.56],[-4.89,-43.49,-4.89,-39.58],[-3.0,-32.1,-3.0,-29.44],[-3.0,-5.64,-3.0,-2.33],[-1.81,-43.49,-1.81,-39.58],[0.01,-34.18,0.01,-0.02],[2.4,-39.57,2.4,-34.19],[2.4,-24.06,2.4,-11.51],[3.22,-24.06,3.22,-11.51],[4.03,-24.06,4.03,-11.51],[4.91,5.38,4.91,9.58],[5.6,-25.71,5.6,-10.62],[6.48,-21.06,6.48,-12.96],[7.93,2.38,7.93,5.37],[9.69,-45.57,9.69,-39.58],[9.94,-43.52,9.94,-40.63],[11.07,-44.65,11.07,-40.48],[12.08,-0.01,12.08,5.37],[13.96,-0.01,13.96,3.49],[14.4,6.1,14.4,9.33],[14.65,5.38,14.65,9.58],[19.11,-44.65,19.11,-40.48],[19.99,-45.57,19.99,-39.58],[19.99,-34.18,19.99,-0.02],[23.89,-37.85,23.89,-34.83],[23.89,0.62,23.89,3.64],[24.83,-37.85,24.83,-34.83],[24.83,0.62,24.83,3.64],[26.4,-37.85,26.4,-34.83],[26.4,0.62,26.4,3.64],[27.35,-37.85,27.35,-34.83],[27.35,0.62,27.35,3.64],[28.85,-37.85,28.85,-34.83],[28.85,0.62,28.85,3.64],[29.86,-37.85,29.86,-34.83],[29.86,0.62,29.86,3.64],[36.14,-0.01,36.14,5.38],[62.66,-35.18,62.66,-0.02],[63.41,-32.34,63.41,-28.21],[64.8,-32.34,64.8,-28.08],[65.49,-39.57,65.49,-36.63],[66.24,-39.57,66.24,-22.79]],"d":[[10.34,-39.57,"h",0.92,"door"],[6.11,-34.23,"h",1.2,"door"],[12.63,-34.23,"h",2.4,"door"],[3.68,5.35,"h",1.2,"door"]],"l":[]},"4":{"w":[[-12.58,-43.47,-1.77,-43.47],[-10.0,-42.46,-6.01,-42.46],[-9.65,-40.96,-6.01,-40.96],[-7.34,-40.2,-4.81,-40.2],[-12.57,-39.57,-3.83,-39.57],[-2.63,-39.57,66.25,-39.57],[5.35,-38.88,8.67,-38.88],[-10.18,-38.57,-5.5,-38.57],[38.29,-37.06,43.63,-37.06],[5.35,-36.56,8.67,-36.56],[-8.58,-34.48,-5.5,-34.48],[-12.59,-34.17,-1.93,-34.17],[-0.73,-34.17,50.69,-34.17],[52.21,-34.17,62.64,-34.17],[62.65,-23.49,65.5,-23.49],[62.65,-22.92,66.25,-22.92],[-10.88,-19.78,-3.08,-19.78],[-10.82,-14.5,-3.08,-14.5],[-10.82,-14.31,-3.08,-14.31],[31.41,-2.56,34.03,-2.56],[8.95,-1.68,11.57,-1.68],[-12.59,0.01,-1.93,0.01],[-0.73,0.01,50.42,0.01],[52.61,0.01,62.67,0.01],[37.0,0.83,42.03,0.83],[2.37,1.52,4.99,1.52],[54.15,1.71,64.46,1.71],[7.91,2.34,12.09,2.34],[36.17,3.59,54.18,3.59],[-10.18,4.29,-5.41,4.29],[-12.58,5.35,3.08,5.35],[4.28,5.35,36.16,5.35],[7.22,6.86,10.7,6.86],[14.66,8.18,17.45,8.18],[7.22,8.56,11.06,8.56],[11.19,9.37,14.38,9.37],[1.91,9.56,14.66,9.56],[-12.55,-43.47,-12.55,5.37],[-11.67,0.27,-11.67,3.64],[-11.36,-37.77,-11.36,-34.47],[-10.48,-31.95,-10.48,-22.74],[-10.48,-10.31,-10.48,-2.3],[-9.92,-31.95,-9.92,-22.74],[-9.92,-10.31,-9.92,-2.3],[-9.29,-31.95,-9.29,-23.14],[-9.29,-9.91,-9.29,-2.3],[-8.6,-37.67,-8.6,-34.47],[-5.71,-7.74,-5.71,-3.74],[-5.52,-38.59,-5.52,-34.47],[-5.52,0.25,-5.52,4.26],[-5.2,-5.54,-5.2,-2.74],[-4.83,-43.49,-4.83,-39.58],[-3.13,-25.6,-3.13,-17.89],[-3.13,-16.69,-3.13,-8.93],[-1.81,-43.49,-1.81,-39.58],[0.01,-34.18,0.01,-0.02],[1.9,5.38,1.9,9.58],[4.91,5.38,4.91,9.58],[7.93,2.38,7.93,5.37],[12.08,-0.01,12.08,5.37],[14.65,5.38,14.65,9.58],[17.42,5.38,17.42,8.17],[19.99,-34.18,19.99,5.37],[36.14,-0.01,36.14,5.38],[38.09,-36.87,38.09,-34.2],[43.81,-36.87,43.81,-34.2],[49.97,-33.75,49.97,-0.44],[54.11,-4.92,54.11,-0.19],[61.53,-29.33,61.53,-26.33],[62.66,-37.28,62.66,-33.28],[62.66,-32.08,62.66,-0.02],[63.41,-31.76,63.41,-28.21],[64.42,-7.2,64.42,1.77],[64.86,-31.76,64.86,-27.82],[66.24,-39.57,66.24,-22.79]],"d":[[-3.23,-39.57,"h",1.2,"door"],[-1.33,-34.17,"h",1.2,"door"],[51.45,-34.17,"h",1.52,"door"],[-1.33,0.01,"h",1.2,"door"],[51.51,0.01,"h",2.2,"door"],[3.68,5.35,"h",1.2,"door"],[-3.13,-17.29,"v",1.2,"door"],[62.66,-32.68,"v",1.2,"door"]],"l":[]},"5":{"w":[[-12.6,-43.47,-1.77,-43.47],[-10.92,-42.46,-6.28,-42.46],[-10.85,-40.96,-6.28,-40.96],[-7.54,-40.2,-4.81,-40.2],[-12.57,-39.57,-3.86,-39.57],[-2.66,-39.57,66.25,-39.57],[5.35,-38.88,8.67,-38.88],[-10.18,-38.51,-5.5,-38.51],[10.43,-37.75,13.05,-37.75],[5.35,-36.62,8.67,-36.62],[-8.58,-34.61,-5.5,-34.61],[-10.63,-34.17,-1.89,-34.17],[-0.31,-34.17,12.7,-34.17],[13.9,-34.17,44.71,-34.17],[46.51,-34.17,62.64,-34.17],[55.05,-32.85,57.67,-32.85],[45.07,-32.1,47.69,-32.1],[0.18,-30.4,2.81,-30.4],[62.8,-27.89,66.24,-27.89],[-2.01,-26.06,0.61,-26.06],[62.65,-23.49,65.5,-23.49],[62.65,-22.8,66.25,-22.8],[-2.2,-19.72,0.42,-19.72],[16.18,-18.4,18.8,-18.4],[5.45,-17.71,8.07,-17.71],[0.03,-16.2,12.09,-16.2],[2.63,-12.93,5.26,-12.93],[29.83,-12.49,32.45,-12.49],[-7.37,-11.99,-2.39,-11.99],[-2.2,-6.33,0.42,-6.33],[-10.63,0.01,-2.0,0.01],[-0.28,0.01,14.7,0.01],[16.8,0.01,62.67,0.01],[20.51,0.77,23.18,0.77],[4.96,1.14,7.58,1.14],[23.88,1.33,33.77,1.33],[7.91,2.4,12.09,2.4],[14.28,2.97,16.9,2.97],[-10.18,4.29,-5.42,4.29],[-12.58,5.35,3.08,5.35],[4.28,5.35,36.17,5.35],[4.92,6.04,8.6,6.04],[7.14,6.86,11.85,6.86],[7.14,8.56,12.19,8.56],[1.91,9.56,14.66,9.56],[-12.55,-43.47,-12.55,5.37],[-11.67,0.41,-11.67,3.64],[-8.97,-34.18,-8.97,-0.02],[-8.6,-37.67,-8.6,-34.62],[-5.52,-38.53,-5.52,-34.62],[-5.52,0.41,-5.52,4.26],[-4.83,-43.49,-4.83,-39.58],[-3.69,-45.54,-3.69,-41.42],[-2.38,-34.18,-2.38,-24.84],[-2.38,-21.29,-2.38,-11.55],[-2.38,-10.35,-2.38,-0.02],[-1.81,-43.49,-1.81,-39.58],[0.01,-31.99,0.01,-18.03],[0.01,-14.12,0.01,-3.8],[0.01,-2.9,0.01,-0.02],[1.9,5.38,1.9,9.58],[4.91,5.38,4.91,9.58],[7.93,2.38,7.93,5.37],[12.08,-34.18,12.08,-0.02],[12.08,2.38,12.08,5.37],[14.4,6.1,14.4,9.33],[14.65,5.38,14.65,9.58],[19.99,-37.27,19.99,-29.54],[19.99,-28.34,19.99,-4.2],[19.99,-3.0,19.99,5.38],[23.89,1.35,23.89,5.35],[33.75,1.35,33.75,5.35],[36.14,-0.01,36.14,5.38],[41.11,-36.87,41.11,-34.19],[43.81,-36.87,43.81,-34.19],[55.37,-37.58,55.37,-34.19],[62.66,-32.08,62.66,-0.02],[63.41,-32.01,63.41,-27.91],[64.8,-32.01,64.8,-27.69],[66.24,-39.57,66.24,-22.79]],"d":[[-3.26,-39.57,"h",1.2,"door"],[-1.1,-34.17,"h",1.58,"door"],[13.3,-34.17,"h",1.2,"door"],[45.61,-34.17,"h",1.8,"door"],[-1.14,0.01,"h",1.72,"door"],[15.75,0.01,"h",2.1,"door"],[3.68,5.35,"h",1.2,"door"],[-2.38,-10.95,"v",1.2,"door"],[0.01,-3.35,"v",0.9,"door"],[12.08,1.18,"v",2.4,"door"],[19.99,-28.94,"v",1.2,"door"],[19.99,-3.6,"v",1.2,"door"]],"l":[]},"6":{"w":[[-12.58,-43.47,-1.77,-43.47],[-12.54,-43.28,-9.85,-43.28],[-9.72,-42.46,-6.02,-42.46],[-10.05,-40.96,-6.02,-40.96],[-12.54,-40.2,-9.85,-40.2],[-12.57,-39.57,-3.87,-39.57],[-2.67,-39.57,66.25,-39.57],[5.35,-38.88,8.67,-38.88],[-10.19,-38.51,-5.5,-38.51],[12.33,-37.69,14.96,-37.69],[47.01,-37.19,55.33,-37.19],[5.35,-36.62,8.67,-36.62],[-8.59,-34.48,-5.5,-34.48],[-12.59,-34.17,-4.64,-34.17],[-2.84,-34.17,0.56,-34.17],[1.76,-34.17,12.84,-34.17],[14.04,-34.17,52.95,-34.17],[54.15,-34.17,62.64,-34.17],[45.58,-31.28,48.2,-31.28],[-11.19,-30.59,-7.99,-30.59],[14.47,-30.09,17.1,-30.09],[-11.19,-29.58,-7.99,-29.58],[-11.19,-28.58,-7.99,-28.58],[-11.19,-27.7,-7.99,-27.7],[62.65,-27.7,65.73,-27.7],[-11.19,-26.57,-7.99,-26.57],[-11.19,-25.56,-7.99,-25.56],[-11.19,-24.56,-7.99,-24.56],[-11.18,-23.55,-7.99,-23.55],[62.66,-23.55,65.54,-23.55],[62.65,-22.8,66.25,-22.8],[-11.18,-22.55,-7.99,-22.55],[-10.98,-21.92,-8.19,-21.92],[-11.18,-20.91,-7.99,-20.91],[-11.18,-19.78,-7.99,-19.78],[4.43,-19.78,7.05,-19.78],[-10.29,-18.84,-7.67,-18.84],[-7.67,-17.64,-2.05,-17.64],[-7.66,-17.14,-4.66,-17.14],[2.51,-16.2,12.09,-16.2],[-11.18,-13.37,-7.99,-13.37],[-11.18,-12.37,-7.99,-12.37],[-10.98,-11.36,-8.19,-11.36],[-10.98,-10.54,-8.19,-10.54],[-11.19,-7.97,-7.99,-7.97],[-11.19,-7.02,-7.99,-7.02],[-11.19,-5.96,-7.99,-5.96],[-11.19,-4.95,-7.99,-4.95],[-11.19,-3.95,-7.99,-3.95],[14.64,-3.95,17.26,-3.95],[5.25,-3.69,7.87,-3.69],[-11.19,-2.94,-7.99,-2.94],[-12.59,0.01,-4.6,0.01],[-2.81,0.01,0.55,0.01],[1.75,0.01,6.08,0.01],[6.98,0.01,12.84,0.01],[14.04,0.01,62.67,0.01],[3.88,2.34,6.5,2.34],[7.91,2.34,12.09,2.34],[-10.18,4.29,-5.46,4.29],[-12.58,5.35,3.08,5.35],[4.27,5.35,19.99,5.35],[4.92,6.04,7.97,6.04],[11.39,6.04,14.42,6.04],[6.66,6.86,11.38,6.86],[6.66,8.56,11.08,8.56],[4.92,9.37,8.22,9.37],[11.19,9.37,14.42,9.37],[1.91,9.56,14.66,9.56],[-12.55,-43.47,-12.55,5.37],[-11.67,0.27,-11.67,3.64],[-11.36,-37.77,-11.36,-34.47],[-10.17,-32.56,-10.17,-19.76],[-10.17,-13.37,-10.17,-1.97],[-9.66,-32.56,-9.66,-24.56],[-9.66,-8.97,-9.66,-1.97],[-8.97,-32.56,-8.97,-19.76],[-8.97,-13.37,-8.97,-1.97],[-8.6,-37.67,-8.6,-34.47],[-6.84,-14.17,-6.84,-1.74],[-6.65,-31.96,-6.65,-20.33],[-5.89,-29.76,-5.89,-20.34],[-5.89,-14.16,-5.89,-8.57],[-5.89,-8.35,-5.89,-4.54],[-5.71,-4.54,-5.71,-1.74],[-5.52,-38.52,-5.52,-34.47],[-5.52,0.27,-5.52,4.26],[-5.27,-14.16,-5.27,-8.57],[-4.83,-43.49,-4.83,-39.58],[-2.94,-32.22,-2.94,-22.79],[-2.94,-11.45,-2.94,-1.82],[-2.44,-31.61,-2.44,-22.79],[-2.44,-11.45,-2.44,-2.43],[-1.81,-43.49,-1.81,-39.58],[0.01,-34.18,0.01,-20.69],[0.01,-18.89,0.01,-11.7],[0.01,-9.9,0.01,-0.02],[1.9,5.38,1.9,9.58],[2.53,-34.18,2.53,-0.02],[4.91,5.38,4.91,9.58],[7.87,-3.7,7.87,-0.95],[7.87,2.38,7.87,5.37],[12.08,-34.18,12.08,-0.02],[12.08,2.38,12.08,5.37],[14.4,6.06,14.4,9.38],[14.65,5.38,14.65,9.58],[16.98,-32.71,16.98,-30.11],[16.98,-0.01,16.98,3.73],[17.23,-3.91,17.23,-1.16],[19.99,-37.71,19.99,5.37],[60.08,-39.3,60.08,-35.92],[62.66,-35.18,62.66,-0.02],[63.41,-32.8,63.41,-27.68],[64.8,-32.8,64.8,-27.55],[66.24,-39.57,66.24,-22.79]],"d":[[-3.27,-39.57,"h",1.2,"door"],[-3.74,-34.17,"h",1.8,"door"],[1.16,-34.17,"h",1.2,"door"],[13.44,-34.17,"h",1.2,"door"],[53.55,-34.17,"h",1.2,"door"],[-3.7,0.01,"h",1.8,"door"],[1.15,0.01,"h",1.2,"door"],[6.53,0.01,"h",0.9,"door"],[13.44,0.01,"h",1.2,"door"],[7.2,2.34,"h",1.41,"door"],[3.68,5.35,"h",1.2,"door"],[9.68,6.04,"h",3.43,"door"],[9.71,9.37,"h",2.98,"door"],[0.01,-19.79,"v",1.8,"door"],[0.01,-10.8,"v",1.8,"door"],[7.87,0.71,"v",3.33,"door"],[12.08,1.18,"v",2.4,"door"]],"l":[]},"7":{"w":[[-12.58,-43.47,-1.77,-43.47],[-14.38,-43.28,-10.54,-43.28],[-10.41,-42.46,-6.24,-42.46],[-10.06,-40.96,-6.24,-40.96],[-7.34,-40.2,-4.81,-40.2],[-14.37,-39.57,-3.86,-39.57],[-2.66,-39.57,66.25,-39.57],[5.35,-38.88,8.67,-38.88],[-10.18,-38.51,-5.5,-38.51],[-3.56,-37.69,-0.93,-37.69],[38.29,-37.06,43.63,-37.06],[5.35,-36.62,8.67,-36.62],[25.93,-36.31,32.03,-36.31],[14.49,-35.99,19.97,-35.99],[-8.58,-34.48,-5.5,-34.48],[-10.38,-34.17,0.86,-34.17],[2.21,-34.17,5.9,-34.17],[7.1,-34.17,18.7,-34.17],[21.29,-34.17,62.64,-34.17],[2.94,-33.86,12.09,-33.86],[2.94,-32.35,6.06,-32.35],[8.19,-32.35,12.09,-32.35],[-10.17,-31.15,-1.82,-31.15],[13.95,-30.53,16.57,-30.53],[62.65,-23.49,65.5,-23.49],[-19.77,-22.8,-14.98,-22.8],[-12.14,-22.8,-4.19,-22.8],[62.65,-22.8,66.25,-22.8],[-4.2,-21.6,0.02,-21.6],[-17.97,-20.79,-12.37,-20.79],[-11.98,-20.79,-6.61,-20.79],[-17.97,-20.41,-12.37,-20.41],[-17.97,-19.28,-12.37,-19.28],[-17.97,-18.9,-12.37,-18.9],[-11.98,-18.9,-6.61,-18.9],[-12.57,-16.83,-3.59,-16.83],[2.51,-16.32,12.09,-16.32],[-17.97,-14.94,-12.37,-14.94],[-11.98,-14.94,-6.61,-14.94],[-17.73,-14.69,-12.44,-14.69],[-17.97,-14.38,-12.37,-14.38],[2.92,-14.38,6.07,-14.38],[6.25,-14.38,9.51,-14.38],[-17.97,-13.31,-12.37,-13.31],[-17.97,-12.93,-12.37,-12.93],[-11.98,-12.93,-6.61,-12.93],[-4.2,-12.62,0.02,-12.62],[-12.57,-10.86,-4.16,-10.86],[-19.77,-7.21,-12.58,-7.21],[-10.17,-3.0,-1.82,-3.0],[-10.48,0.01,0.86,0.01],[2.06,0.01,54.59,0.01],[56.09,0.01,62.67,0.01],[-5.29,2.4,0.03,2.4],[7.91,2.4,12.09,2.4],[-10.19,4.22,-5.41,4.22],[-12.58,5.35,3.08,5.35],[4.28,5.35,19.99,5.35],[11.81,6.04,14.38,6.04],[7.41,6.86,11.33,6.86],[7.41,8.56,11.69,8.56],[11.81,9.37,14.38,9.37],[1.91,9.56,14.67,9.56],[-19.78,-22.79,-19.78,-7.2],[-15.0,-34.19,-15.0,-22.79],[-14.38,-39.58,-14.38,-34.19],[-12.55,-42.16,-12.55,5.37],[-12.18,-18.59,-12.18,-15.0],[-11.67,0.27,-11.67,3.64],[-11.42,-37.77,-11.42,-34.47],[-10.17,-34.18,-10.17,-22.79],[-10.17,-10.8,-10.17,-0.02],[-8.6,-37.67,-8.6,-34.47],[-5.52,-38.52,-5.52,-34.47],[-5.52,-22.72,-5.52,-10.89],[-5.52,0.27,-5.52,5.08],[-5.27,2.48,-5.27,5.08],[-4.83,-43.49,-4.83,-39.58],[-3.88,-0.79,-3.88,7.71],[-3.57,-37.63,-3.57,-32.76],[-3.57,-21.59,-3.57,-18.3],[-3.57,-15.3,-3.57,-12.61],[-1.81,-43.49,-1.81,-39.58],[0.01,-32.54,0.01,-24.74],[0.01,-23.54,0.01,-20.18],[0.01,-19.11,0.01,-11.25],[0.01,-10.05,0.01,-1.66],[1.9,5.38,1.9,9.58],[2.53,-34.18,2.53,-15.55],[2.53,-14.66,2.53,-0.02],[4.91,5.38,4.91,9.58],[7.93,2.38,7.93,5.37],[12.08,-34.18,12.08,-0.02],[12.08,2.37,12.08,5.37],[14.4,-35.98,14.4,-32.96],[14.4,6.1,14.4,9.33],[14.59,5.38,14.59,9.58],[14.84,-0.01,14.84,3.55],[17.48,-27.13,17.48,-20.71],[17.48,-6.58,17.48,-3.37],[18.3,-27.13,18.3,-20.71],[18.3,-6.58,18.3,-3.37],[19.99,-32.88,19.99,5.37],[31.87,-39.28,31.87,-36.32],[32.06,-39.28,32.06,-36.22],[38.09,-36.87,38.09,-34.2],[43.81,-36.87,43.81,-34.2],[62.66,-35.18,62.66,-0.02],[63.41,-32.64,63.41,-28.23],[64.86,-32.64,64.86,-27.89],[66.24,-39.57,66.24,-22.79]],"d":[[-3.26,-39.57,"h",1.2,"door"],[1.54,-34.17,"h",1.36,"door"],[6.5,-34.17,"h",1.2,"door"],[19.99,-34.17,"h",2.6,"door"],[-13.56,-22.8,"h",2.83,"door"],[1.46,0.01,"h",1.2,"door"],[55.34,0.01,"h",1.5,"door"],[3.68,5.35,"h",1.2,"door"],[-3.57,-16.8,"v",3.0,"door"],[0.01,-24.14,"v",1.2,"door"],[0.01,-19.65,"v",1.07,"door"],[0.01,-10.65,"v",1.2,"door"],[2.53,-15.1,"v",0.9,"door"],[12.08,1.18,"v",2.39,"door"]],"l":[]},"8":{"w":[[-14.37,-43.47,-1.77,-43.47],[-10.28,-42.46,-6.14,-42.46],[-9.93,-40.96,-6.14,-40.96],[-7.34,-40.2,-4.81,-40.2],[-12.57,-39.57,-3.86,-39.57],[-2.66,-39.57,66.25,-39.57],[5.35,-38.88,8.67,-38.88],[-10.18,-38.57,-5.5,-38.57],[62.65,-38.57,65.47,-38.57],[38.29,-37.19,43.63,-37.19],[50.09,-37.19,52.84,-37.19],[13.9,-37.0,17.4,-37.0],[5.35,-36.56,8.67,-36.56],[22.34,-35.8,36.53,-35.8],[-8.58,-34.61,-5.5,-34.61],[-10.64,-34.23,0.76,-34.23],[2.37,-34.23,5.66,-34.23],[6.56,-34.23,18.7,-34.23],[21.29,-34.23,50.92,-34.23],[51.99,-34.23,56.09,-34.23],[57.29,-34.23,62.64,-34.23],[63.2,-34.23,65.98,-34.23],[2.51,-33.92,9.53,-33.92],[15.04,-32.47,19.9,-32.47],[62.65,-25.25,65.98,-25.25],[20.63,-24.49,23.25,-24.49],[62.65,-23.49,65.5,-23.49],[-12.57,-22.8,0.02,-22.8],[62.65,-22.8,66.25,-22.8],[7.29,-21.67,9.91,-21.67],[15.14,-21.67,19.95,-21.67],[-12.57,-16.83,-5.39,-16.83],[2.51,-16.2,12.09,-16.2],[16.55,-14.0,19.95,-14.0],[17.39,-12.81,19.95,-12.81],[-12.57,-10.8,0.02,-10.8],[15.14,-6.08,19.95,-6.08],[7.29,-3.95,9.91,-3.95],[15.04,-2.5,19.95,-2.5],[-10.64,0.01,0.76,0.01],[2.21,0.01,14.92,0.01],[16.12,0.01,50.33,0.01],[52.53,0.01,59.38,0.01],[7.91,2.4,12.09,2.4],[43.94,3.59,54.17,3.59],[-10.19,4.29,-5.4,4.29],[16.43,4.73,19.84,4.73],[-12.58,5.35,3.08,5.35],[4.28,5.35,19.99,5.35],[7.04,6.86,11.75,6.86],[7.04,8.56,12.09,8.56],[1.91,9.56,14.67,9.56],[-12.55,-43.47,-12.55,5.37],[-11.86,0.25,-11.86,3.59],[-10.23,-34.18,-10.23,-22.79],[-10.23,-10.8,-10.23,-0.02],[-8.6,-37.67,-8.6,-34.62],[-5.52,-38.52,-5.52,-34.62],[-5.52,-22.79,-5.52,-10.81],[-5.52,0.25,-5.52,4.26],[-4.95,-43.27,-4.95,-40.21],[-1.81,-43.49,-1.81,-39.58],[0.01,-34.18,0.01,-24.84],[0.01,-23.64,0.01,-15.76],[0.01,-14.36,0.01,-9.0],[0.01,-7.8,0.01,-0.02],[1.9,5.38,1.9,9.58],[2.53,-34.18,2.53,-0.02],[4.91,5.38,4.91,9.58],[7.93,2.38,7.93,5.37],[12.01,-34.18,12.01,-27.14],[12.01,-25.94,12.01,-9.16],[12.01,-7.96,12.01,-0.02],[12.01,2.38,12.01,5.37],[13.9,-37.03,13.9,-34.19],[14.15,2.68,14.15,15.78],[14.4,6.1,14.4,9.33],[14.65,5.38,14.65,9.58],[15.03,-32.48,15.03,-28.69],[15.03,-26.49,15.03,-16.9],[15.03,-11.01,15.03,-5.86],[15.03,-4.96,15.03,-2.42],[15.53,-41.76,15.53,-35.93],[16.22,2.35,16.22,5.22],[16.41,-15.49,16.41,-12.42],[16.41,2.25,16.41,5.22],[17.42,-37.03,17.42,-34.22],[19.87,-32.88,19.87,5.37],[38.09,-36.87,38.09,-34.2],[43.81,-36.87,43.81,-34.2],[43.81,-0.01,43.81,3.58],[49.97,-34.18,49.97,-0.02],[52.86,-39.28,52.86,-34.22],[54.11,-4.85,54.11,-0.18],[54.11,-0.01,54.11,3.58],[60.77,-29.58,60.77,-25.58],[61.28,-29.58,61.28,-25.58],[62.66,-39.58,62.66,-33.53],[62.66,-32.33,62.66,-0.02],[63.41,-31.89,63.41,-27.91],[64.73,-31.89,64.73,-27.55],[66.24,-39.57,66.24,-22.79]],"d":[[-3.26,-39.57,"h",1.2,"door"],[1.56,-34.23,"h",1.61,"door"],[6.11,-34.23,"h",0.9,"door"],[19.99,-34.23,"h",2.6,"door"],[51.46,-34.23,"h",1.07,"door"],[56.69,-34.23,"h",1.2,"door"],[1.49,0.01,"h",1.46,"door"],[15.52,0.01,"h",1.2,"door"],[51.43,0.01,"h",2.2,"door"],[3.68,5.35,"h",1.2,"door"],[0.01,-24.24,"v",1.2,"door"],[0.01,-15.06,"v",1.4,"door"],[0.01,-8.4,"v",1.2,"door"],[12.01,-26.54,"v",1.2,"door"],[12.01,-8.56,"v",1.2,"door"],[12.01,1.18,"v",2.4,"door"],[15.03,-27.59,"v",2.2,"door"],[15.03,-5.41,"v",0.9,"door"],[62.66,-32.93,"v",1.2,"door"]],"l":[[62.66,-0.02,"v",2.01]]},"9":{"w":[[-12.57,-43.53,-1.77,-43.53],[-9.78,-42.46,-5.91,-42.46],[-10.09,-41.02,-5.91,-41.02],[-12.54,-40.2,-9.9,-40.2],[-7.34,-40.2,-4.81,-40.2],[-12.57,-39.57,-3.98,-39.57],[-2.78,-39.57,66.25,-39.57],[52.48,-39.32,62.64,-39.32],[5.09,-38.63,8.91,-38.63],[62.65,-38.63,65.46,-38.63],[5.09,-36.62,8.91,-36.62],[52.35,-36.62,55.59,-36.62],[4.84,-36.31,9.17,-36.31],[-12.59,-34.3,-8.97,-34.3],[-8.07,-34.3,1.93,-34.3],[52.33,-34.3,60.49,-34.3],[62.65,-34.3,65.98,-34.3],[52.71,-33.86,60.09,-33.86],[3.71,-32.54,11.5,-32.54],[46.78,-31.91,55.88,-31.91],[12.78,-30.15,32.9,-30.15],[-12.57,-29.96,1.9,-29.96],[-5.25,-28.2,-2.53,-28.2],[-5.25,-27.7,-2.53,-27.7],[-2.26,-27.7,1.88,-27.7],[-5.25,-27.45,-2.53,-27.45],[-2.26,-27.45,1.88,-27.45],[-5.25,-27.07,-2.53,-27.07],[-2.26,-27.07,1.88,-27.07],[52.67,-22.86,60.11,-22.86],[62.65,-22.86,66.25,-22.86],[-12.57,-21.6,0.18,-21.6],[48.88,-21.1,55.66,-21.1],[3.71,-19.21,11.5,-19.21],[56.41,-18.84,60.18,-18.84],[-7.93,-17.46,-2.28,-17.46],[52.5,-15.63,60.06,-15.63],[3.71,-15.0,11.5,-15.0],[-12.57,-13.18,1.88,-13.18],[48.51,-12.55,56.12,-12.55],[-1.16,-12.11,1.88,-12.11],[-1.16,-11.93,1.88,-11.93],[-7.65,-11.42,-2.52,-11.42],[-7.65,-10.8,-2.52,-10.8],[-5.25,-10.29,-2.52,-10.29],[-2.26,-10.29,1.88,-10.29],[36.17,-9.98,38.79,-9.98],[53.11,-7.21,56.45,-7.21],[19.65,-5.39,23.52,-5.39],[25.02,-5.39,29.96,-5.39],[37.36,-5.39,41.71,-5.39],[43.2,-5.39,52.35,-5.39],[-12.57,-4.95,-9.95,-4.95],[-9.05,-4.95,1.9,-4.95],[-0.69,-2.56,1.9,-2.56],[3.71,-1.81,11.5,-1.81],[47.32,-0.49,49.93,-0.49],[52.35,-0.49,56.45,-0.49],[56.55,-0.49,62.22,-0.49],[47.27,-0.3,49.93,-0.3],[-12.59,-0.05,14.79,-0.05],[16.28,-0.05,62.67,-0.05],[-6.5,0.26,-2.69,0.26],[7.91,2.4,12.09,2.4],[-12.58,5.35,3.24,5.35],[4.44,5.35,19.99,5.35],[7.28,6.86,11.74,6.86],[7.28,8.56,12.08,8.56],[1.91,9.56,14.67,9.56],[-12.55,-43.49,-12.55,5.36],[-11.67,0.24,-11.67,3.63],[-7.72,-0.02,-7.72,5.36],[-4.83,-43.5,-4.83,-35.99],[-1.81,-43.5,-1.81,-36.08],[-0.62,-19.06,-0.62,-15.89],[0.01,2.23,0.01,5.36],[1.9,-34.19,1.9,-31.64],[1.9,-30.14,1.9,-26.62],[1.9,-24.12,1.9,-20.25],[1.9,-19.06,1.9,-15.89],[1.9,-14.7,1.9,-10.07],[1.9,-7.57,1.9,-1.69],[1.9,5.37,1.9,9.57],[3.72,-32.39,3.72,-19.21],[3.72,-15.01,3.72,-1.83],[4.85,-38.87,4.85,-36.33],[4.85,5.37,4.85,9.57],[7.93,2.37,7.93,5.36],[9.06,-38.87,9.06,-36.33],[11.51,-32.39,11.51,-19.21],[11.51,-15.01,11.51,-1.83],[12.08,2.37,12.08,5.36],[12.77,-30.13,12.77,-8.58],[14.4,-5.41,14.4,-0.03],[14.4,6.09,14.4,9.32],[14.65,5.37,14.65,9.57],[16.98,-5.41,16.98,-0.03],[19.99,-30.06,19.99,-8.58],[19.99,-0.02,19.99,5.36],[21.19,-5.41,21.19,-0.03],[25.96,-5.41,25.96,-0.03],[32.0,-5.41,32.0,-0.03],[32.81,-30.13,32.81,-8.58],[34.89,-5.41,34.89,-0.03],[39.16,-5.41,39.16,-0.03],[40.86,-39.42,40.86,-36.9],[41.04,-39.42,41.04,-36.9],[41.42,-22.36,41.42,-18.65],[41.42,-11.58,41.42,-8.12],[43.87,-39.42,43.87,-36.9],[44.06,-39.42,44.06,-36.9],[46.95,-5.41,46.95,-0.03],[47.26,-5.24,47.26,-0.29],[49.9,-3.8,49.9,-0.34],[51.35,-32.85,51.35,-26.25],[52.35,-39.58,52.35,-35.83],[52.35,-34.19,52.35,-6.95],[52.35,-3.57,52.35,-0.03],[52.54,-39.3,52.54,-36.59],[52.54,-33.88,52.54,-23.4],[52.54,-22.87,52.54,-15.61],[52.54,-15.51,52.54,-7.21],[52.73,-22.75,52.73,-15.61],[56.31,-19.49,56.31,-15.61],[60.08,-32.51,60.08,-26.12],[60.08,-24.75,60.08,-21.38],[62.22,-5.32,62.22,-0.5],[62.47,-39.3,62.47,-36.59],[62.66,-39.59,62.66,-34.27],[62.66,-32.69,62.66,-0.03],[66.24,-39.58,66.24,-22.8]],"d":[[-8.62,-40.2,"h",2.56,"door"],[-3.38,-39.57,"h",1.2,"door"],[-8.52,-34.3,"h",0.9,"door"],[61.57,-34.3,"h",2.16,"door"],[61.38,-22.86,"h",2.54,"door"],[24.27,-5.39,"h",1.5,"door"],[42.46,-5.39,"h",1.5,"door"],[-9.5,-4.95,"h",0.9,"door"],[51.14,-0.49,"h",2.43,"door"],[15.54,-0.05,"h",1.5,"door"],[3.84,5.35,"h",1.2,"door"],[1.9,-30.89,"v",1.5,"door"],[1.9,-25.37,"v",2.5,"door"],[1.9,-19.65,"v",1.2,"door"],[1.9,-15.3,"v",1.2,"door"],[1.9,-8.82,"v",2.5,"door"],[52.35,-35.01,"v",1.64,"door"],[52.54,-35.23,"v",2.71,"door"],[60.08,-25.44,"v",1.37,"door"],[62.66,-33.48,"v",1.58,"door"]],"l":[]},"10":{"w":[[-4.81,-46.93,-1.77,-46.93],[-8.02,-46.74,-5.5,-46.74],[-8.02,-43.66,-4.8,-43.66],[-12.57,-43.03,-4.77,-43.03],[52.34,-43.03,66.26,-43.03],[-1.8,-37.63,1.93,-37.63],[-12.57,-36.43,-4.79,-36.43],[-6.47,-34.42,-1.13,-34.42],[-12.57,-33.42,1.9,-33.42],[-7.76,-32.35,-5.14,-32.35],[62.65,-26.25,66.26,-26.25],[-8.27,-25.06,1.9,-25.06],[-5.2,-23.86,-1.0,-23.86],[-8.96,-18.9,-6.34,-18.9],[-5.2,-17.83,-1.0,-17.83],[-8.07,-16.64,1.9,-16.64],[53.97,-10.92,56.59,-10.92],[14.47,-8.85,52.34,-8.85],[-12.57,-8.28,1.9,-8.28],[-8.42,-6.84,-5.8,-6.84],[1.9,-3.44,62.65,-3.44],[7.9,-1.68,14.5,-1.68],[-12.58,1.9,19.99,1.9],[60.46,3.59,74.94,3.59],[67.66,5.6,73.26,5.6],[1.91,6.11,14.66,6.11],[67.68,10.76,73.27,10.76],[60.46,11.95,74.94,11.95],[-6.42,16.73,1.37,16.73],[60.46,20.37,74.94,20.37],[67.66,21.06,73.25,21.06],[-5.4,24.2,-2.44,24.2],[-4.0,26.47,-0.5,26.47],[-6.42,27.22,1.36,27.22],[67.68,27.47,73.28,27.47],[60.46,28.73,74.94,28.73],[69.94,29.04,73.5,29.04],[-12.55,-46.93,-12.55,1.92],[-8.97,-43.02,-8.97,-39.08],[-6.46,16.75,-6.46,27.26],[-5.39,-33.43,-5.39,-25.04],[-5.39,-16.65,-5.39,-8.27],[-4.83,-46.92,-4.83,-38.4],[-1.87,-46.94,-1.87,-37.64],[1.33,16.76,1.33,27.25],[1.9,-37.63,1.9,-3.47],[1.9,1.93,1.9,6.13],[4.91,1.93,4.91,6.13],[7.93,-1.66,7.93,1.92],[14.46,-8.86,14.46,-3.47],[14.65,1.93,14.65,6.13],[19.99,-3.46,19.99,1.92],[52.35,-43.02,52.35,-8.86],[60.46,3.56,60.46,11.96],[60.46,20.34,60.46,28.74],[62.66,-26.24,62.66,-3.47],[66.24,-43.02,66.24,-26.24],[67.69,5.61,67.69,10.79],[67.69,21.05,67.69,27.46],[73.28,5.59,73.28,10.77],[73.28,21.03,73.28,27.44],[74.91,3.55,74.91,28.76]],"d":[],"l":[]}};
+(function(){var d=WD[10],o={w:[],d:[],l:[]},u={w:[],d:[],l:[]};
+  d.w.forEach(function(q){var mx=(q[0]+q[2])/2,mz=(q[1]+q[3])/2,t=l10map(mx,mz); if(!t)return; var dx=t[0]-mx,dz=t[1]-mz; (t[2]?u:o).w.push([q[0]+dx,q[1]+dz,q[2]+dx,q[3]+dz])});
+  d.d.forEach(function(q){var t=l10map(q[0],q[1]); if(t)(t[2]?u:o).d.push([t[0],t[1],q[2],q[3],q[4]])});
+  d.l.forEach(function(q){var t=l10map(q[0],q[1]); if(t)(t[2]?u:o).l.push([t[0],t[1],q[2],q[3]])});
+  WD[10]=o; WD[11]=u})();
+
+var wallMatR=new THREE.MeshLambertMaterial({color:0x9aa5b0}), doorMat=new THREE.MeshLambertMaterial({color:0xe0892b}), slideMat=new THREE.MeshLambertMaterial({color:0xc2410c}), louvMat=new THREE.MeshLambertMaterial({color:0x3f8fb5}), lintMat=new THREE.MeshLambertMaterial({color:0x9aa5b0});
+var gW=[],gD=[],gL=[],oldEdge=[],doorList=[];
+LEVELS.forEach(function(L,i){
+  var d=WD[i]; if(!d)return; var g=levelGroups[i], base=L.elev-21.55, H=Math.max(2.6,L.h-0.3);
+  var w=new THREE.Group(), dr=new THREE.Group(), lv=new THREE.Group(); g.add(w); g.add(dr); g.add(lv); gW.push(w); gD.push(dr); gL.push(lv);
+  d.w.forEach(function(s){wall(w,wallMatR,[s[0],s[1]],[s[2],s[3]],base+(s[4]||0),H)});
+  d.d.forEach(function(o){
+    var hz=o[2]==='h', sl=o[4]==='sliding', W2=o[3], x=o[0], z=o[1], dh=2.2;
+    var pm=new THREE.Mesh(new THREE.BoxGeometry(hz?W2:0.12,dh,hz?0.12:W2),sl?slideMat:doorMat); pm.position.set(x,base+(o[5]||0)+dh/2,z); dr.add(pm);
+    if(H>dh+0.1){var lt=new THREE.Mesh(new THREE.BoxGeometry(hz?W2:0.25,H-dh,hz?0.25:W2),lintMat); lt.position.set(x,base+(o[5]||0)+dh+(H-dh)/2,z); w.add(lt)}
+    doorList.push({l:i,x:x,z:z,w:W2,s:sl});
+  });
+  d.l.forEach(function(o){
+    var hz=o[2]==='h', W2=Math.max(1.5,o[3]), lh=Math.min(2.2,H-0.6);
+    var m=new THREE.Mesh(new THREE.BoxGeometry(hz?W2:0.3,lh,hz?0.3:W2),louvMat); m.position.set(o[0],base+(o[4]||0)+H-lh/2-0.3,o[1]); lv.add(m);
+  });
+});
+function applyOpenings(){
+  var tw=document.getElementById('tw').checked, td=document.getElementById('td').checked, tl=document.getElementById('tl').checked;
+  gW.forEach(function(o){o.visible=tw}); gD.forEach(function(o){o.visible=td}); gL.forEach(function(o){o.visible=tl});
+  AREAS.forEach(function(a){if(a.wallMat)a.wallMat.visible=!tw});
+}
+['tw','td','tl'].forEach(function(id){document.getElementById(id).addEventListener('change',applyOpenings)});
+applyOpenings();
+function doorsIn(a){var n=0,s=0; doorList.forEach(function(o){if(o.l===a.l&&inA(a,o.x,o.z,0.8)){n++; if(o.s)s++}}); return [n,s]}
+
+/* ---------- Nombres y norte ---------- */
+var gN=[];
+LEVELS.forEach(function(L,i){
+  var g=levelGroups[i];
+  var ng=new THREE.Group(); g.add(ng); gN.push(ng);
+});
+function textSprite(t,w,h){
+  var c=document.createElement('canvas'),x=c.getContext('2d'),fs=56; x.font='600 '+fs+'px "IBM Plex Mono",monospace'; var tw=Math.ceil(x.measureText(t).width)+36; c.width=tw; c.height=fs+28;
+  x=c.getContext('2d'); x.font='600 '+fs+'px "IBM Plex Mono",monospace'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillStyle='rgba(20,32,44,.88)'; var r=14; x.beginPath(); x.moveTo(r,0); x.arcTo(tw,0,tw,c.height,r); x.arcTo(tw,c.height,0,c.height,r); x.arcTo(0,c.height,0,0,r); x.arcTo(0,0,tw,0,r); x.fill();
+  x.fillStyle='#fff'; x.fillText(t,tw/2,c.height/2+3);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false})); sp.renderOrder=10; var hh=h||2.6; sp.scale.set(hh*c.width/c.height,hh,1); return sp}
+function areaRooms(a){return ROOMS.filter(function(r){return r.a===a}).map(function(r){return r.room})}
+function buildNames(){
+  var mode=document.getElementById('tn').value;
+  gN.forEach(function(ng){while(ng.children.length){var o=ng.children.pop(); if(o.material){o.material.map.dispose();o.material.dispose()}}});
+  if(!mode)return;
+  AREAS.forEach(function(a){
+    if(a.v||a.l>=gN.length)return; var t;
+    if(mode==='a')t=a.id; else{var rs=areaRooms(a); if(!rs.length)return; t=rs[0]+(rs.length>1?' +'+(rs.length-1):'')}
+    var c=anchor(a), L=LEVELS[a.l], sp=textSprite(t,0,Math.max(1.6,Math.min(3.2,Math.min(a.bb[2]-a.bb[0],a.bb[3]-a.bb[1])*0.18)));
+    sp.position.set(c[0],a.fy+2.4,c[1]); gN[a.l].add(sp);
+  });
+}
+document.getElementById('tn').addEventListener('change',buildNames);
+/* flecha norte en la escena */
+(function(){var ar=new THREE.ArrowHelper(new THREE.Vector3(0,0,-1),new THREE.Vector3(70,-0.4,-6),14,0xd6452b,3,2.4); scene.add(ar); var s=label('N',6); s.position.set(70,-0.4,-24); scene.add(s)})();
+function updCompass(){
+  var f=new THREE.Vector3(); camera.getWorldDirection(f); var r=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
+  var v=f; if(Math.abs(f.y)>0.95)v=new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
+  var ang=Math.atan2(-r.z,-v.z)*180/Math.PI;
+  document.getElementById('cneedle').setAttribute('transform','rotate('+ang.toFixed(1)+')');
+}
+/* ejes A-D y 1-2 */
+function label(t,s){var c=document.createElement('canvas');c.width=c.height=128;var x=c.getContext('2d');x.beginPath();x.arc(64,64,52,0,7);x.lineWidth=7;x.strokeStyle='#7f95a8';x.stroke();x.fillStyle='#7f95a8';x.font='bold 64px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(t,64,68);var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false}));sp.scale.set(s,s,1);return sp}
+(function(){
+  var axM=new THREE.LineBasicMaterial({color:0x7f95a8,transparent:true,opacity:0.6});
+  [[0,'A'],[20,'B'],[35,'C'],[50,'D']].forEach(function(p){
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p[0],-0.5,22),new THREE.Vector3(p[0],-0.5,-44)]),axM)); var s=label(p[1],5); s.position.set(p[0],-0.5,26); scene.add(s);
+  });
+  [[0,'1'],[-34.2,'2']].forEach(function(p){
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-22,-0.5,p[0]),new THREE.Vector3(72,-0.5,p[0])]),axM)); var s=label(p[1],5); s.position.set(-26,-0.5,p[0]); scene.add(s);
+  });
+})();
+/* jacket y cotas (plano DW41-OS-TOPS-ST-301055 hoja 2: vista isométrica) */
+var JK=new THREE.Group(); JK.visible=false; scene.add(JK);
+(function(){
+  var B0=21.55, Y=function(e){return e-B0};
+  var X=[0,50], Z=[0,-34.2], top=10.845, mud=-29.4, sp=6;
+  var legM=new THREE.MeshLambertMaterial({color:0x8a97a3}), brM=new THREE.MeshLambertMaterial({color:0xa9b4be});
+  function cyl(a,b,r,m){var d=new THREE.Vector3().subVectors(b,a), L=d.length(); var g=new THREE.CylinderGeometry(r,r,L,10); var o=new THREE.Mesh(g,m); o.position.copy(a).add(b).multiplyScalar(0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()); JK.add(o); return o}
+  function lp(xi,zi,e){ /* pata con pendiente: base más abierta que la cabeza */
+    var f=(top-e)/(top-mud), dx=(xi?1:-1)*sp*f, dz=(zi?-1:1)*sp*f; return new THREE.Vector3(X[xi]+dx,Y(e),Z[zi]+dz)}
+  var fr=[top,-6.8,-17,mud];
+  for(var xi=0;xi<2;xi++)for(var zi=0;zi<2;zi++){ cyl(lp(xi,zi,top),lp(xi,zi,mud),1.3,legM);
+    var b=new THREE.Mesh(new THREE.CylinderGeometry(5,5,0.6,6),new THREE.MeshLambertMaterial({color:0x6f7b86})); b.position.copy(lp(xi,zi,mud)); b.position.y=Y(mud); JK.add(b)}
+  for(var i=0;i<fr.length-1;i++){
+    for(var k=0;k<4;k++){ /* 4 caras: arriostramiento en X + marco horizontal */
+      var pairs=[[[0,0],[1,0]],[[1,0],[1,1]],[[1,1],[0,1]],[[0,1],[0,0]]][k];
+      var a1=lp(pairs[0][0],pairs[0][1],fr[i]), a2=lp(pairs[1][0],pairs[1][1],fr[i]), b1=lp(pairs[0][0],pairs[0][1],fr[i+1]), b2=lp(pairs[1][0],pairs[1][1],fr[i+1]);
+      cyl(a1,b2,0.45,brM); cyl(a2,b1,0.45,brM); cyl(b1,b2,0.55,brM);
+    }}
+  for(var k=0;k<4;k++){var q=[[0,0],[1,0],[1,1],[0,1]]; cyl(lp(q[k][0],q[k][1],top),lp(q[(k+1)%4][0],q[(k+1)%4][1],top),0.7,brM)}
+  /* zona de salpicadura */
+  var sz=new THREE.Mesh(new THREE.BoxGeometry(62,Y(14.04)-Y(-6.8),46),new THREE.MeshBasicMaterial({color:0x2a9d8f,transparent:true,opacity:0.13,depthWrite:false})); sz.position.set(25,(Y(14.04)+Y(-6.8))/2,-17.1); JK.add(sz);
+  /* planos de cota */
+  function tex(t){var c=document.createElement('canvas');c.width=640;c.height=64;var x=c.getContext('2d');x.fillStyle='rgba(20,40,55,.82)';x.fillRect(0,0,640,64);x.fillStyle='#fff';x.font='bold 30px sans-serif';x.textBaseline='middle';x.fillText(t,14,34);var s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false}));s.scale.set(26,2.6,1);return s}
+  [[14.04,'Límite superior zona de salpicadura  EL. +14.040',0x2a9d8f],[10.845,'Parte superior del jacket (T.O.P.)  EL. +10.845',0xd6452b],[0,'LAT  EL. ±0.000',0x2b6cb0],[-6.8,'Límite inferior zona de salpicadura  EL. −6.800',0x2a9d8f],[-29.4,'Mudmat  EL. −29.400',0x8a6d3b],[-30.8,'Lecho marino (mudline)  EL. −30.800',0x8a6d3b]].forEach(function(c){
+    var y=Y(c[0]); var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-14,y,8),new THREE.Vector3(64,y,8),new THREE.Vector3(64,y,-42),new THREE.Vector3(-14,y,-42),new THREE.Vector3(-14,y,8)]);
+    JK.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:c[2]}))); var s=tex(c[1]); s.position.set(-14+13,y+1.5,8); JK.add(s)});
+  var mud2=new THREE.Mesh(new THREE.PlaneGeometry(78,50),new THREE.MeshBasicMaterial({color:0x8a6d3b,transparent:true,opacity:0.18,side:THREE.DoubleSide})); mud2.rotation.x=-Math.PI/2; mud2.position.set(25,Y(-30.8),-17); JK.add(mud2);
+})();
+document.getElementById('tjk').addEventListener('change',function(){JK.visible=this.checked});
+themeColors();
+try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',themeColors)}catch(e){}
+new MutationObserver(themeColors).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ---------- Estado ---------- */
+var mode='orbit', focusLevel=null, listLevel=1, selected=null, hovered=null, walkArea=null, explode=0;
+var target=new THREE.Vector3(28,12,-14), theta=-0.6, phi=1.0, radius=190;
+var yaw=0, pitch=0, wx=0, wz=0, flight=null, keys={};
+function floorOf(a){return a.fy+a.l*explode}
+/* ---------- Planos PDF como textura del suelo (carga bajo demanda por nivel) ---------- */
+var texCache={}, texLoader=new THREE.TextureLoader(), toastT=0;
+function toast(t){var e=document.getElementById('toast'); e.textContent=t; e.style.opacity=1; clearTimeout(toastT); toastT=setTimeout(function(){e.style.opacity=0},3200)}
+function getTex(key){
+  if(texCache[key])return texCache[key]; var o={ready:false,tex:null}; texCache[key]=o;
+  texLoader.load(TILES[key].f,function(tx){ if(texCache[key]!==o){tx.dispose();return} tx.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy()); o.tex=tx; o.ready=true; applyStates()},undefined,function(){delete texCache[key]; toast('No se pudo cargar el plano PDF (¿abierto como archivo local? usa un servidor)')});
+  return o}
+function pdfLevel(){return mode==='walk'?(walkArea?walkArea.l:null):focusLevel}
+function hiKey(a){var ok=(mode==='walk')?(a===walkArea):(a===selected&&mode==='orbit'); var k='a:'+a.l+'|'+a.id; return ok&&TILES[k]?k:null}
+function setHiMatrix(tx,a,hk){
+  if(tx.userData.mk===hk)return; var L=TILES[tileOf(a)],H=TILES[hk];
+  var su=L.w/H.w,tu=(L.x0-H.x0)/H.w,sv=L.h/H.h,tv=1-(L.z0-H.z0)/H.h-L.h/H.h;
+  tx.matrixAutoUpdate=false; tx.matrix.set(su,0,tu,0,sv,tv,0,0,1); tx.userData.mk=hk}
+function refreshPdf(){
+  var on=document.getElementById('tg').checked, lv=on?pdfLevel():null, need={};
+  if(lv!==null)AREAS.forEach(function(a){if(!a.v&&a.l===lv){need[tileOf(a)]=1; var hk=hiKey(a); if(hk)need[hk]=1}});
+  Object.keys(texCache).forEach(function(k){if(!need[k]){var o=texCache[k]; if(o.tex)o.tex.dispose(); delete texCache[k]}});
+  Object.keys(need).forEach(getTex);
+  PROPS.forEach(function(o){o.visible=!(lv!==null&&o.userData.lv===lv)});
+  AREAS.forEach(function(a){
+    if(a.v||!a.floorMat)return; var m=a.floorMat, tx=null;
+    if(lv!==null&&a.l===lv){
+      var hk=hiKey(a), ho=hk&&texCache[hk], lo=texCache[tileOf(a)];
+      if(ho&&ho.ready){tx=ho.tex; setHiMatrix(tx,a,hk)} else if(lo&&lo.ready)tx=lo.tex;
+    }
+    if(tx){ if(m.emissiveMap!==tx){m.color.setHex(0); m.emissiveMap=tx; m.needsUpdate=true} a.texOn=true }
+    else if(a.texOn){ m.emissiveMap=null; m.color.set(a.c); m.needsUpdate=true; a.texOn=false }
+  });
+}
+document.getElementById('tg').addEventListener('change',function(){
+  if(this.checked&&pdfLevel()===null)toast('Elige un nivel (N0–N11) para ver el plano PDF sobre el suelo');
+  applyStates()});
+function applyStates(){
+  refreshPdf();
+  AREAS.forEach(function(a){
+    if(a.v)return;
+    if(mode==='walk'){var cur=a===walkArea; a.floorMat.opacity=1; a.wallMat.opacity=cur?0.5:0.12; a.floorMat.emissive.setHex(0)}
+    else{
+      var dim=focusLevel!==null&&a.l!==focusLevel;
+      var cd=!dim&&!crMatch(a), hi=!dim&&(crMode||(cxMode&&cxMode!==4))&&!cd;
+      a.floorMat.opacity=dim?0.1:(cd?0.14:0.95); a.wallMat.opacity=dim?0.03:(cd?0.03:0.22);
+      a.floorMat.color.setHex(cxMode&&!cd&&cxCat(a)?CXCOL[cxCat(a)]:a.cBase); a.floorMat.emissive.setHex(dim||cd?0:(a===selected?0x3a3a3a:(a===hovered?0x242424:(hi?0x2c4f66:0))));
+    }
+  });
+  AREAS.forEach(function(a){if(a.texOn)a.floorMat.emissive.setHex(mode==='walk'?0xf2f2f2:(a===selected?0xffffff:(a===hovered?0xf6f6f6:0xe4e4e4)))});
+  if(typeof gN!=='undefined'&&gN)gN.forEach(function(o){o.visible=(mode!=='walk')});
+  levelGroups.forEach(function(g,i){g.visible=(mode==='walk')?!!(walkArea&&i===walkArea.l):(focusLevel===null||i===focusLevel); g.position.y=i*explode});
+}
+function orbitPose(){
+  var p=new THREE.Vector3(target.x+radius*Math.sin(phi)*Math.sin(theta),target.y+radius*Math.cos(phi),target.z+radius*Math.sin(phi)*Math.cos(theta));
+  var t=new THREE.PerspectiveCamera(); t.position.copy(p); t.lookAt(target); return {p:p,q:t.quaternion.clone()};
+}
+function walkPose(){return {p:new THREE.Vector3(wx,floorOf(walkArea)+1.7,wz),q:new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch,yaw,0,'YXZ'))}}
+function flyTo(pose,dur,done){flight={t:0,dur:dur,p0:camera.position.clone(),q0:camera.quaternion.clone(),p1:pose.p,q1:pose.q,done:done}}
+function flyOrbit(tx,ty,tz,rad,dur){target.set(tx,ty,tz); radius=rad; flyTo(orbitPose(),dur||0.9)}
+/* ---------- Panel ---------- */
+var elLevels=document.getElementById('levels'), elList=document.getElementById('list'), elInfo=document.getElementById('info');
+function buildLevels(){
+  elLevels.innerHTML='';
+  var all=document.createElement('button'); all.className='chip'+(focusLevel===null?' on':''); all.textContent='Todos';
+  all.onclick=function(){focusLevel=null; applyStates(); buildLevels(); flyOrbit(28,12+explode*5,-14,190)}; elLevels.appendChild(all);
+  LEVELS.forEach(function(L){var b=document.createElement('button'); b.className='chip'+(focusLevel===L.n?' on':''); b.textContent='N'+L.n; b.title='Nivel '+L.n+' '+L.note;
+    b.onclick=function(){focusLevel=L.n; listLevel=L.n; applyStates(); buildLevels(); buildList(); flyOrbit(28,L.elev-21.55+L.n*explode,-14,105)}; elLevels.appendChild(b)});
+}
+var ROOMS=[["ABL","Area Boat Landing","ABL","N",null],["APTJSW","Access Platform Top of Jacket South-West","A00.05","N","0|0.05"],["BL","Boat Landing","ABL","N",null],["CLNL03","Cantilever North Level 03","A03.11","N","3|3.11"],["CLNWL01","External Corridor North and Muster Area","A01.08","N","1|1.08"],["CLSEL04","Cantilever South East Level 04","A04.07","N","4|4.07"],["CLSL01","Cantilever South Level 01","A01.10","N","1|1.10"],["CLSL08","Cantilever South Level 08","A08.08","N","8|8.08"],["CLSSL05","Cantilever South and Stair Level 05","A05.10","N","5|5.10"],["CLWL01","Cantilever West and Life Raft","A01.13","N","1|1.13"],["CLWL07","Cantilever West Level 07","A07.11","N","7|7.11"],["CRANE","CRANE","0","N",null],["D00A01","Airlock","A00.02","N","0|0.02"],["D00C01","Access Area from/to Level 1","A00.02","N","0|0.02"],["D00C02","Access Area from/to Level 1","A00.02","N","0|0.02"],["D00E01","Elevator (Pit)","A00.01","N","0|0.01"],["D00R01","Double bottom","A00.02","N","0|0.02"],["D00R01DB1","Double Bottom","A00.02","N","0|0.02"],["D00R01DB2","Double Bottom","A00.03","N","0|0.03"],["D00R01DB3","Double Bottom","A00.04","N","0|0.04"],["D00R04","Sea Water Lift Pumps","A00.02","N","0|0.02"],["D00R05","Sea Water Lift Pumps","A00.02","N","0|0.02"],["D00S03","Staircase","A00.04","N","0|0.04"],["D00T03","Service Trunk","A00.04","N","0|0.04"],["D01A01","Airlock","A01.05","N","1|1.05"],["D01A02","Airlock","A01.13","N","1|1.13"],["D01A03","Airlock","A01.11","N","1|1.11"],["D01A04","Airlock","A01.05","N","1|1.05"],["D01A05","Airlock","A01.07","N","1|1.07"],["D01A06","Airlock","A01.09","N","1|1.09"],["D01A07","Airlock","A01.01","N","1|1.01"],["D01C01","Access Area from/to Level 0","A01.05","N","1|1.05"],["D01C02","Access Area from/to Level 0","A01.12","N","1|1.12"],["D01R01","Chillers & Pumping","A01.03","N","1|1.03"],["D01R02","HV Spare Parts Store","A01.07","N","1|1.07"],["D01R03","HVDC 1","A01.04","Y","1|1.04"],["D01R04","Cooling Water Systems","A01.02","Y","1|1.02"],["D01R05","HVA/C (AHU'S)","A01.01","N","1|1.01"],["D01R06","Stranded","A01.01","N","1|1.01"],["D01R07","Stranded Toilet","A01.01","N","1|1.01"],["D01R08","Hypochlorite","A01.01","N","1|1.01"],["D01S01","Staircase","A01.15","N","1|1.15"],["D01S02","Staircase","A01.14","N","1|1.14"],["D01S03","Staircase","A01.09","N","1|1.09"],["D01T02","Service Trunk","A01.09","N","1|1.09"],["D01T03","Service Trunk","A01.09","N","1|1.09"],["D01T05","HVAC Cables Jointing","A01.06","N","1|1.06"],["D01T06","HVAC Cables Jointing","A01.11","N","1|1.11"],["D01T07","HVAC Cables Pulling","A01.06","N","1|1.06"],["D01T08","Service Trunk","A01.01","N","1|1.01"],["D02A01","Airlock","A01.15","N","1|1.15"],["D02A02","Airlock","A01.14","N","1|1.14"],["D02C01","Corridor","A02.05","N","2|2.05"],["D02C02","Corridor","A02.09","N","2|2.09"],["D02C03","Corridor","A02.07","N","2|2.07"],["D02E01","Elevator","A00.01","N","0|0.01"],["D02R01","DC - GIS Terminal Point Connection 1","A02.07","N","2|2.07"],["D02R02","HVA/C (AHU'S)","A02.01","N","2|2.01"],["D02R03","CWC UPS + C&P","A02.02","Y","2|2.02"],["D02R04","Cooling Water Systems","A02.03","N","2|2.03"],["D02S01","Staircase","A01.15","N","1|1.15"],["D02S02","Staircase","A01.14","N","1|1.14"],["D02S03","Staircase","A01.09","N","1|1.09"],["D02T01","Service Trunk","A02.04","N","2|2.04"],["D02T02","Service Trunk","A01.09","N","1|1.09"],["D02T03","Service Trunk","A01.09","N","1|1.09"],["D02T04","Service Trunk","A02.10","N","2|2.10"],["D02T05","HVAC Cables Jointing","A02.06","N","2|2.06"],["D02T06","HVAC Cables Jointing","A02.08","N","2|2.08"],["D02T07","HVDC Cables Pulling","A02.06","N","2|2.06"],["D03A01","Airlock","A01.15","N","1|1.15"],["D03A02","Airlock","A01.14","N","1|1.14"],["D03C01","Corridor","A03.04","N","3|3.04"],["D03C02","Corridor","A03.08","N","3|3.08"],["D03C03","Corridor","A03.10","N","3|3.10"],["D03C04","Corridor","A03.06","N","3|3.06"],["D03E01","Elevator","A00.01","N","0|0.01"],["D03R02","66 kV GIS","A03.02","Y","3|3.02"],["D03R03","66 kV GIS C&P","A03.01","Y","3|3.01"],["D03R04","Escape Lighting","A03.10","N","3|3.10"],["D03R05","Emergency Lighting","A03.10","N","3|3.10"],["D03S01","Staircase","A01.15","N","1|1.15"],["D03S02","Staircase","A01.14","N","1|1.14"],["D03S03","Staircase","A01.09","N","1|1.09"],["D03T01","Service Trunk","A03.03","N","3|3.03"],["D03T02","Service Trunk","A01.09","N","1|1.09"],["D03T03","Service Trunk","A01.09","N","1|1.09"],["D03T04","Service Trunk","A03.09","N","3|3.09"],["D03T05","HVAC Cables Jointing","A03.05","N","3|3.05"],["D03T06","HVAC Cables Jointing","A03.07","N","3|3.07"],["D03T07","Service Trunk","A03.10","N","3|3.10"],["D03T08","HVDC Cables Pulling","A03.05","N","3|3.05"],["D03T09","Service Trunk","A03.10","N","3|3.10"],["D04A01","Airlock","A01.15","N","1|1.15"],["D04A02","Airlock","A01.14","N","1|1.14"],["D04A03","Airlock","A04.02","N","4|4.02"],["D04C01","Corridor","A04.04","N","4|4.04"],["D04C02","Corridor","A04.09","N","4|4.09"],["D04C03","Corridor","A04.06","N","4|4.06"],["D04C04","Corridor","A04.01","N","4|4.01"],["D04E01","Elevator","A00.01","N","0|0.01"],["D04R01","HVA/C HVDC","A04.02","N","4|4.02"],["D04R02","Aux. Control & Telecom","A04.01","N","4|4.01"],["D04R03","Aux. Control & Telecom","A04.01","N","4|4.01"],["D04R04","Aux. Control & Telecom","A04.01","N","4|4.01"],["D04S01","Staircase","A01.15","N","1|1.15"],["D04S02","Staircase","A01.14","N","1|1.14"],["D04S03","Staircase","A01.09","N","1|1.09"],["D04T01","Service Trunk","A04.03","N","4|4.03"],["D04T02","Service Trunk","A01.09","N","1|1.09"],["D04T03","Service Trunk","A01.09","N","1|1.09"],["D04T04","Service Trunk","A04.10","N","4|4.10"],["D04T05","HVAC Cables Jointing","A04.05","N","4|4.05"],["D04T06","HVAC Cables Jointing","A04.08","N","4|4.08"],["D04T07","HVDC Cables Pulling","A04.05","N","4|4.05"],["D05A01","Airlock","A01.15","N","1|1.15"],["D05A02","Airlock","A01.14","N","1|1.14"],["D05A03","Airlock","A05.11","N","5|5.11"],["D05C01","Corridor","A05.07","N","5|5.07"],["D05C02","Corridor","A05.11","N","5|5.11"],["D05C03","Corridor","A05.01","N","5|5.01"],["D05C04","Corridor","A05.09","N","5|5.09"],["D05E01","Elevator","A00.01","N","0|0.01"],["D05R01","Transformer 2","A05.03","Y","5|5.03"],["D05R02","420 kV GIS","A05.04","Y","5|5.04"],["D05R03","HVDC 2","A05.05","Y","5|5.05"],["D05R04","Transformer 1","A05.02","Y","5|5.02"],["D05R05","Fire Water Pumps","A05.01","N","5|5.01"],["D05R06","Technical Water  Supply","A05.01","N","5|5.01"],["D05R07","Fire Water Pumps","A05.01","N","5|5.01"],["D05R08","HV Spare Parts Store","A05.09","N","5|5.09"],["D05S01","Staircase","A01.15","N","1|1.15"],["D05S02","Staircase","A01.14","N","1|1.14"],["D05S03","Staircase","A01.09","N","1|1.09"],["D05T01","Service Trunk","A05.06","N","5|5.06"],["D05T02","Service Trunk","A01.09","N","1|1.09"],["D05T03","Service Trunk","A01.09","N","1|1.09"],["D05T04","Service Trunk","A05.12","N","5|5.12"],["D05T05","HVDC Cables Pulling","A05.08","N","5|5.08"],["D05T06","Service Trunk","A05.01","N","5|5.01"],["D05T07","Service Trunk","A05.01","N","5|5.01"],["D06A01","Airlock","A06.11","N","6|6.11"],["D06A02","Airlock","A06.09","N","6|6.09"],["D06C01","Corridor","A06.04","N","6|6.04"],["D06C02","Corridor","A06.08","N","6|6.08"],["D06C03","Corridor","A06.02","N","6|6.02"],["D06C04","Corridor","A06.07","N","6|6.07"],["D06E01","Elevator","A06.01","N","6|6.01"],["D06R01","DC - GIS Terminal Point Connection 2","A06.06","N","6|6.06"],["D06R02","UPS & LV Switchboard 1","A06.02","N","6|6.02"],["D06R03","UPS & LV Switchboard 2","A06.02","N","6|6.02"],["D06S01","Staircase","A06.11","N","6|6.11"],["D06S02","Staircase","A06.09","N","6|6.09"],["D06S03","Staircase","A06.07","N","6|6.07"],["D06T01","Service Trunk","A06.03","N","6|6.03"],["D06T02","Service Trunk","A06.07","N","6|6.07"],["D06T03","Service Trunk","A06.07","N","6|6.07"],["D06T04","Service Trunk","A06.10","N","6|6.10"],["D06T05","HVDC Cables Pulling","A06.05","N","6|6.05"],["D07A01","Airlock","A06.11","N","6|6.11"],["D07A02","Airlock","A06.09","N","6|6.09"],["D07C01","Corridor","A07.06","N","7|7.06"],["D07C02","Corridor","A07.09","N","7|7.09"],["D07C03","Corridor","A07.04","N","7|7.04"],["D07C04","Corridor","A07.08","N","7|7.08"],["D07E01","Elevator","A06.01","N","6|6.01"],["D07R01","C&P","A07.03","Y","7|7.03"],["D07R02","UPS - Batteries 1","A07.04","N","7|7.04"],["D07R03","Auxiliary Transformer 1","A07.02","N","7|7.02"],["D07R04","Auxiliary Transformer 2","A07.01","N","7|7.01"],["D07R05","UPS - Batteries 2","A07.04","N","7|7.04"],["D07R06","UPS Cabinets 1","A07.04","N","7|7.04"],["D07R07","UPS Cabinets 2","A07.04","N","7|7.04"],["D07R08","Central Escape Lighting","A07.09","N","7|7.09"],["D07R09","Central Emergency Lighting","A07.07","N","7|7.07"],["D07S01","Staircase","A06.11","N","6|6.11"],["D07S02","Staircase","A06.09","N","6|6.09"],["D07S03","Staircase","A06.07","N","6|6.07"],["D07T01","Service Trunk","A07.05","N","7|7.05"],["D07T02","Service Trunk","A06.07","N","6|6.07"],["D07T03","Service Trunk","A06.07","N","6|6.07"],["D07T04","Service Trunk","A07.10","N","7|7.10"],["D07T05","HVDC Cables Pulling","A07.07","N","7|7.07"],["D07T06","Service Trunk","A07.04","N","7|7.04"],["D07T07","Service Trunk","A07.04","N","7|7.04"],["D08A01","Airlock","A06.11","N","6|6.11"],["D08A02","Airlock","A06.09","N","6|6.09"],["D08A03","Airlock","A08.03","N","8|8.03"],["D08C01","Corridor","A08.05","N","8|8.05"],["D08C02","Corridor","A08.09","N","8|8.09"],["D08C03","Corridor","A08.01","N","8|8.01"],["D08C04","Corridor","A08.06","N","8|8.06"],["D08C05","Corridor","A08.02","N","8|8.02"],["D08C06","Corridor","A08.09","N","8|8.09"],["D08E01","Elevator","A06.01","N","6|6.01"],["D08R01","Meeting Room","A08.06","N","8|8.06"],["D08R02","Document Store","A08.06","N","8|8.06"],["D08R03","Platform Control Room","A08.07","Y","8|8.07"],["D08R04","HVA/C HVDC","A08.03","N","8|8.03"],["D08R05","Fuel Oil Treatment","A08.01","N","8|8.01"],["D08R06","Diesel Cleaning & Pumping","A08.01","N","8|8.01"],["D08R07","Fuel Oil Treatment","A08.01","N","8|8.01"],["D08R08","Locker Room Female","A08.02","N","8|8.02"],["D08R09","Locker Room Male","A08.02","N","8|8.02"],["D08R10","Locker Room Male","A08.02","N","8|8.02"],["D08R11","Changing room","A08.02","N","8|8.02"],["D08R12","Changing room","A08.02","N","8|8.02"],["D08R13","Emergency Accomodation","A08.02","N","8|8.02"],["D08R14","Office Room","A08.06","N","8|8.06"],["D08R15","Toilet","A08.09","N","8|8.09"],["D08R16","Changing room","A08.02","N","8|8.02"],["D08S01","Staircase","A06.11","N","6|6.11"],["D08S02","Staircase","A06.09","N","6|6.09"],["D08S03","Staircase","A06.07","N","6|6.07"],["D08T01","Service Trunk","A08.04","N","8|8.04"],["D08T02","Service Trunk","A06.07","N","6|6.07"],["D08T03","Service Trunk","A06.07","N","6|6.07"],["D08T04","Service Trunk","A08.10","N","8|8.10"],["D08T05","HVDC Cables Pulling","A08.06","N","8|8.06"],["D08T06","Service Trunk","A08.01","N","8|8.01"],["D08T07","Service Trunk","A08.01","N","8|8.01"],["D09A01","Airlock","A09.01","N","9|9.01"],["D09A02","Airlock","A06.09","N","6|6.09"],["D09A03","Airlock","A09.06","N","9|9.06"],["D09A04","Airlock","A09.06","N","9|9.06"],["D09A05","Airlock","A09.07","N","9|9.07"],["D09A07","Airlock","A09.03","N","9|9.03"],["D09A08","Airlock","A09.04","N","9|9.04"],["D09A09","Airlock","A09.02","N","9|9.02"],["D09C02","Corridor","A09.08","N","9|9.08"],["D09C03","Corridor","A09.06","N","9|9.06"],["D09E01","Elevator","A06.01","N","6|6.01"],["D09R01","Helicopter Pilot Office","A09.06","N","9|9.06"],["D09R02","Helicopter Pilot Resting","A09.06","N","9|9.06"],["D09R03","Helicopter Pilot Resting","A09.06","N","9|9.06"],["D09R04","Heli Lounge","A09.06","N","9|9.06"],["D09R05","Break room + Cold kitchen","A09.06","N","9|9.06"],["D09R06","Toilet","A09.06","N","9|9.06"],["D09R07","Toilet","A09.06","N","9|9.06"],["D09R08","ERT","A09.06","N","9|9.06"],["D09R09","ERT Store","A09.06","N","9|9.06"],["D09R10","First Aid Room","A09.06","N","9|9.06"],["D09R11","DIFFS","A09.06","N","9|9.06"],["D09R12","Spare Parts Store","A09.07","N","9|9.07"],["D09R13","Hazardous Material Store","A09.07","N","9|9.07"],["D09R14","Paint Store","A09.07","N","9|9.07"],["D09R15","Lifting Gear Store","A09.07","N","9|9.07"],["D09R16","Deck Store","A09.07","N","9|9.07"],["D09R17","Garbage Store","A09.07","N","9|9.07"],["D09R18","Diesel Generator","A09.03","N","9|9.03"],["D09R19","Toilet","A09.04","N","9|9.04"],["D09R20","Mechanical Workshop","A09.04","N","9|9.04"],["D09R21","Mechanical Store","A09.04","N","9|9.04"],["D09R22","Fire Fighting Inert Gas System","A09.03","N","9|9.03"],["D09R23","Toilet","A09.02","N","9|9.02"],["D09R24","Electrical Workshop","A09.02","N","9|9.02"],["D09R25","Electrical Store","A09.02","N","9|9.02"],["D09R26","Diesel Generator","A09.03","N","9|9.03"],["D09R27","Auxiliary Transformer Cabinets","A09.01","N","9|9.01"],["D09R28","Fire Fighting CAFS Water System","A09.03","N","9|9.03"],["D09R29","Provision Store","A09.07","N","9|9.07"],["D09R30","Telecom Cabinets","A09.08","N","9|9.08"],["D09R31","HSE Store","A09.06","N","9|9.06"],["D09R32","Changing room","A09.06","N","9|9.06"],["D09R33","Changing room","A09.06","N","9|9.06"],["D09R34","Helideck cabinets","A09.07","N","9|9.07"],["D09S01","Staircase","A06.11","N","6|6.11"],["D09S02","Staircase","A06.09","N","6|6.09"],["D09S03","Staircase","A06.07","N","6|6.07"],["D09T02","Service Trunk","A06.07","N","6|6.07"],["D09T03","Service Trunk","A06.07","N","6|6.07"],["D09T04","Service Trunk","A09.09","N","9|9.09"],["D10A01","Airlock","A10.01","N","10|10.01"],["D10A02","Airlock","A10.04","N","10|10.04"],["D10R01","Water Cooling Expansion Tanks","A10.01","N","10|10.01"],["D10R02","Elevator Machinery","A06.02","N","6|6.02"],["D10R03","Diesel Gererator Cooling","A10.02","N","10|10.02"],["D10R04","Diesel Gererator Cooling","A10.02","N","10|10.02"],["D10R05","Diesel Gererator Air Intake","A10.02","N","10|10.02"],["D10R06","Diesel Gererator Air Intake","A10.02","N","10|10.02"],["D10S01","Staircase","A06.11","N","6|6.11"],["D10S02","Staircase","A06.09","N","6|6.09"],["HL","Helideck","AHL","N",null],["HOLD 2","HOLD 2","--","N",null],["LDAEL09","Laydown Area East Level 09","A09.05","N","9|9.05"],["LDAEL10","Laydown Area East Level 10","A10.04","N","10|10.04"],["LDANL09","Laydown Area North Level 09","A09.05","N","9|9.05"],["LDANL10","Laydown Area North Level 10","A06.11","N","6|6.11"],["LDANWL10","Laydown Area North West Level 10","A10.01","N","10|10.01"],["LDASEL10","Laydown Area South East","A10.04","N","10|10.04"],["LDASL09","Laydown Area South Level 09","A09.05","N","9|9.05"],["LDASL10","Laydown Area South Level 10","A10.04","N","10|10.04"],["LDASWL10","Laydown Area South West Level 10","A10.03","N","10|10.03"],["LDAWL09","Laydown Area West Level 09","A09.05","N","9|9.05"],["LDAWL10","Laydown Area West Level 10","A10.02","N","10|10.02"],["LDAWL11","Laydown Area West Level 11","A11.01","N","11|11.01"],["PDG","Portable Diesel Generator","A09.05","N","9|9.05"],["TC","Temporary Container","A09.05","N","9|9.05"],["TDKL09","TOP DECK","A09.05","N","9|9.05"],["TDKL10","TOP DECK","A10.04","N","10|10.04"],["TFOT","Temporary Fuel-Oil Tank","A09.05","N","9|9.05"],["TOJNE","Top of Jacket North East","ABL","N",null],["TOJSE","Top of Jacket South East","ABL","N",null],["TOPJKT","TOP OF JACKET","ABL","N",null]].map(function(r){return {room:r[0],desc:r[1],area:r[2],cr:r[3]==='Y',key:r[4]}});
+var qs='';
+function areaByKey(k){if(!k)return null; var p=k.split('|'); return AREAS.filter(function(a){return !a.v&&a.l===+p[0]&&a.id===p[1]})[0]||null}
+ROOMS.forEach(function(r){r.a=areaByKey(r.key); if(r.a&&!r.a.cr)r.a.cr=r.cr?'Y':'N'});
+var crMode=0;
+var CXA={"0|0.05":"CX","3|3.11":"CX","1|1.08":"CX","4|4.07":"CX","1|1.10":"CX","8|8.08":"CX","5|5.10":"CX","1|1.13":"CX","7|7.11":"CX","0|0.02":"MIXTO","0|0.01":"C3","0|0.04":"C3","1|1.05":"MIXTO","1|1.11":"MIXTO","1|1.07":"MIXTO","1|1.09":"MIXTO","1|1.01":"MIXTO","1|1.12":"C3","1|1.03":"C3","1|1.04":"C3","1|1.02":"C3","1|1.15":"CX","1|1.14":"CX","1|1.06":"C3","2|2.05":"C3","2|2.09":"C3","2|2.07":"C3","2|2.01":"C3","2|2.02":"C3","2|2.03":"C3","2|2.04":"C3","2|2.10":"C3","2|2.06":"C3","2|2.08":"C3","3|3.04":"C3","3|3.08":"C3","3|3.10":"C3","3|3.06":"C3","3|3.02":"C3","3|3.01":"C3","3|3.03":"C3","3|3.09":"C3","3|3.05":"C3","3|3.07":"C3","4|4.02":"MIXTO","4|4.04":"C3","4|4.09":"C3","4|4.06":"C3","4|4.01":"C3","4|4.03":"C3","4|4.10":"C3","4|4.05":"C3","4|4.08":"C3","5|5.11":"MIXTO","5|5.07":"C3","5|5.01":"C3","5|5.09":"C3","5|5.03":"C3","5|5.04":"C3","5|5.05":"C3","5|5.02":"C3","5|5.06":"C3","5|5.12":"C3","5|5.08":"C3","6|6.11":"CX","6|6.09":"CX","6|6.04":"C3","6|6.08":"C3","6|6.02":"C3","6|6.07":"C3","6|6.01":"C3","6|6.06":"C3","6|6.03":"C3","6|6.10":"C3","6|6.05":"C3","7|7.06":"C3","7|7.09":"C3","7|7.04":"C3","7|7.08":"C3","7|7.03":"C3","7|7.02":"C3","7|7.01":"C3","7|7.07":"C3","7|7.05":"C3","7|7.10":"C3","8|8.03":"MIXTO","8|8.05":"C3","8|8.09":"C3","8|8.01":"C3","8|8.06":"C3","8|8.02":"C3","8|8.07":"C3","8|8.04":"C3","8|8.10":"C3","9|9.01":"MIXTO","9|9.06":"MIXTO","9|9.07":"MIXTO","9|9.03":"MIXTO","9|9.04":"MIXTO","9|9.02":"MIXTO","9|9.08":"C3","9|9.09":"C3","10|10.01":"MIXTO","10|10.04":"CX","10|10.02":"CX","9|9.05":"CX","10|10.03":"CX","11|11.01":"CX"},CXR={"D00A01":"CX","D00C01":"C3","D00C02":"C3","D00E01":"C3","D00R01":"CX","D00R04":"C3","D00R05":"C3","D00S03":"C3","D00T03":"C3","D01A01":"CX","D01A02":"CX","D01A03":"CX","D01A04":"CX","D01A05":"CX","D01A06":"CX","D01A07":"CX","D01C01":"C3","D01C02":"C3","D01E01":"C3","D01R01":"C3","D01R02":"C3","D01R03":"C3","D01R04":"C3","D01R05":"C3","D01R06":"C3","D01R07":"C3","D01R08":"C3","D01S01":"CX","D01S02":"CX","D01S03":"C3","D01T02":"C3","D01T03":"C3","D01T05":"C3","D01T06":"C3","D01T07":"C3","D01T08":"C3","D02A01":"CX","D02A02":"CX","D02C01":"C3","D02C02":"C3","D02C03":"C3","D02E01":"C3","D02R01":"C3","D02R02":"C3","D02R03":"C3","D02R04":"C3","D02S01":"CX","D02S02":"CX","D02S03":"CX","D02T01":"C3","D02T02":"C3","D02T03":"C3","D02T04":"C3","D02T05":"C3","D02T06":"C3","D02T07":"C3","D03A01":"CX","D03A02":"CX","D03C01":"C3","D03C02":"C3","D03C03":"C3","D03C04":"C3","D03E01":"C3","D03R02":"C3","D03R03":"C3","D03R04":"C3","D03R05":"C3","D03S01":"CX","D03S02":"CX","D03S03":"C3","D03T01":"C3","D03T02":"C3","D03T03":"C3","D03T04":"C3","D03T05":"C3","D03T06":"C3","D03T07":"C3","D03T08":"C3","D03T09":"C3","D04A01":"CX","D04A02":"CX","D04A03":"CX","D04C01":"C3","D04C02":"C3","D04C03":"C3","D04C04":"C3","D04E01":"C3","D04R01":"C3","D04R02":"C3","D04R03":"C3","D04R04":"C3","D04S01":"CX","D04S02":"CX","D04S03":"C3","D04T01":"C3","D04T02":"C3","D04T03":"C3","D04T04":"C3","D04T05":"C3","D04T06":"C3","D04T07":"C3","D05A01":"CX","D05A02":"CX","D05A03":"CX","D05C01":"C3","D05C02":"C3","D05C03":"C3","D05C04":"C3","D05E01":"C3","D05R01":"C3","D05R02":"C3","D05R03":"C3","D05R04":"C3","D05R05":"C3","D05R06":"C3","D05R07":"C3","D05R08":"C3","D05S01":"CX","D05S02":"CX","D05S03":"C3","D05T01":"C3","D05T02":"C3","D05T03":"C3","D05T04":"C3","D05T05":"C3","D05T06":"C3","D05T07":"C3","D06A01":"CX","D06A02":"CX","D06C01":"C3","D06C02":"C3","D06C03":"C3","D06C04":"C3","D06E01":"C3","D06R01":"C3","D06R02":"C3","D06R03":"C3","D06S01":"CX","D06S02":"CX","D06S03":"C3","D06T01":"C3","D06T02":"C3","D06T03":"C3","D06T04":"C3","D06T05":"C3","D07A01":"CX","D07A02":"CX","D07C01":"C3","D07C02":"C3","D07C03":"C3","D07C04":"C3","D07E01":"C3","D07R01":"C3","D07R02":"C3","D07R03":"C3","D07R04":"C3","D07R05":"C3","D07R06":"C3","D07R07":"C3","D07R08":"C3","D07R09":"C3","D07S01":"CX","D07S02":"CX","D07S03":"C3","D07T01":"C3","D07T02":"C3","D07T03":"C3","D07T04":"C3","D07T05":"C3","D07T06":"C3","D07T07":"C3","D08A01":"CX","D08A02":"CX","D08A03":"CX","D08C01":"C3","D08C02":"C3","D08C03":"C3","D08C04":"C3","D08C05":"C3","D08C06":"C3","D08E01":"C3","D08R01":"C3","D08R02":"C3","D08R03":"C3","D08R04":"C3","D08R05":"C3","D08R06":"C3","D08R07":"C3","D08R08":"C3","D08R09":"C3","D08R10":"C3","D08R11":"C3","D08R12":"C3","D08R13":"C3","D08R14":"C3","D08R15":"C3","D08R16":"C3","D08S01":"CX","D08S02":"CX","D08S03":"C3","D08T01":"C3","D08T02":"C3","D08T03":"C3","D08T04":"C3","D08T05":"C3","D08T06":"C3","D08T07":"C3","D09A01":"CX","D09A02":"CX","D09A03":"CX","D09A04":"CX","D09A05":"CX","D09A07":"CX","D09A08":"CX","D09A09":"CX","D09C02":"C3","D09C03":"C3","D09E01":"C3","D09R01":"C3","D09R02":"C3","D09R03":"C3","D09R04":"C3","D09R05":"C3","D09R06":"C3","D09R07":"C3","D09R08":"C3","D09R09":"C3","D09R10":"C3","D09R11":"C3","D09R12":"CX","D09R13":"CX","D09R14":"CX","D09R15":"CX","D09R16":"CX","D09R17":"CX","D09R18":"C3","D09R19":"C3","D09R20":"C3","D09R21":"C3","D09R22":"C3","D09R23":"C3","D09R24":"C3","D09R25":"C3","D09R26":"C3","D09R27":"C3","D09R28":"C3","D09R29":"C3","D09R30":"C3","D09R31":"C3","D09R32":"C3","D09R33":"C3","D09R34":"C3","D09S01":"CX","D09S02":"CX","D09S03":"C3","D09T02":"C3","D09T03":"C3","D09T04":"C3","D10A01":"CX","D10A02":"CX","D10R01":"C3","D10R02":"C3","D10R03":"CX","D10R04":"CX","D10R05":"CX","D10R06":"CX","D10S01":"CX","D10S02":"CX"},CXE=["ABL","APTJSW","BL","CLNL03","CLNWL01","CLSEL04","CLSL01","CLSL08","CLSSL05","CLWL01","CLWL07","CRANE","HL","HOLD 2","LDAEL09","LDAEL10","LDANL09","LDANL10","LDANWL10","LDASEL10","LDASL09","LDASL10","LDASWL10","LDAWL09","LDAWL10","LDAWL11","PDG","TC","TDKL09","TDKL10","TFOT","TOJNE","TOJSE","TOPJKT"];
+var CXCOL={C3:0x3b8fd6,CX:0xe0642b,MIXTO:0x9b59b6};
+var cxMode=0;
+function cxCat(a){return CXA[a.l+'|'+a.id]||null}
+function cxMatch(a){return !cxMode||cxMode===4||cxCat(a)===(cxMode===1?'C3':cxMode===2?'CX':'MIXTO')}
+function roomCat(r){return CXR[r.room]||(CXE.indexOf(r.room)>=0?'CX':null)}
+function crMatch(a){return (!crMode||(crMode===1&&a.cr==='Y')||(crMode===2&&a.cr==='N'))&&cxMatch(a)}
+Array.prototype.forEach.call(document.querySelectorAll('#cxf .chip'),function(b){b.onclick=function(){cxMode=+b.dataset.m; Array.prototype.forEach.call(document.querySelectorAll('#cxf .chip'),function(x){x.classList.toggle('on',x===b)}); applyStates(); buildList()}});
+Array.prototype.forEach.call(document.querySelectorAll('#crf .chip'),function(b){b.onclick=function(){crMode=+b.dataset.m; Array.prototype.forEach.call(document.querySelectorAll('#crf .chip'),function(x){x.classList.toggle('on',x===b)}); applyStates(); buildList()}});
+function norm(t){return String(t).toLowerCase().replace(/[^a-z0-9.]/g,'')}
+function rcxOk(r){if(!cxMode||cxMode===4)return true; var c=roomCat(r); return cxMode===1?c==='C3':cxMode===2?c==='CX':false}
+function buildSearch(){
+  elList.innerHTML=''; var q=norm(qs), qa=q.replace(/^a(?=\d)/,'');
+  document.getElementById('lvltitle').textContent='Resultados · "'+qs.trim()+'"';
+  var ra=AREAS.filter(function(a){return !a.v&&crMatch(a)&&(a.id.indexOf(qa)===0||norm(a.name).indexOf(q)>=0)});
+  var rr=ROOMS.filter(function(r){return (crMode===0||(crMode===1&&r.cr)||(crMode===2&&!r.cr))&&rcxOk(r)&&(norm(r.room).indexOf(q)>=0||norm(r.desc).indexOf(q)>=0||norm(r.area).indexOf(q)>=0||(r.a&&r.a.id===qa))});
+  function row(code,sub,a,cr){
+    var r=document.createElement('div'); r.className='row'+(a?'':' dis'); r.tabIndex=0;
+    r.innerHTML='<span class="sw"></span><div class="t"><b></b><span class="n"></span></div>';
+    r.querySelector('.sw').style.background=a?a.c:'transparent'; r.querySelector('b').textContent=code; r.querySelector('.n').textContent=sub;
+    if(cr){var c=document.createElement('span'); c.className='cr'; c.textContent='CR'; r.querySelector('b').appendChild(c)}
+    if(a){var go=document.createElement('button'); go.className='go'; go.textContent='Entrar'; go.onclick=function(e){e.stopPropagation(); enter(a)}; r.appendChild(go);
+      r.onclick=function(){select(a,true)}; r.onkeydown=function(e){if(e.key==='Enter')select(a,true)}}
+    elList.appendChild(r)}
+  ra.slice(0,12).forEach(function(a){row('Área '+a.id,'N'+a.l+' · '+a.name,a,false)});
+  rr.slice(0,80).forEach(function(r){row(r.room,r.desc+' · '+r.area+(roomCat(r)?' · '+roomCat(r):'')+(r.a?'':' (sin ubicación en el plano)'),r.a,r.cr)});
+  if(!ra.length&&!rr.length){var e=document.createElement('div'); e.className='n'; e.style.cssText='padding:10px 6px;font-size:12px;color:var(--mut)'; e.textContent='Sin resultados.'; elList.appendChild(e)}
+  else if(rr.length>80){var e2=document.createElement('div'); e2.style.cssText='padding:6px;font-size:11px;color:var(--mut)'; e2.textContent=rr.length+' rooms; afina la búsqueda.'; elList.appendChild(e2)}
+}
+document.getElementById('q').addEventListener('input',function(e){qs=e.target.value; buildList()});
+function buildList(){
+  if(norm(qs)){buildSearch();return}
+  var L=LEVELS[listLevel]; document.getElementById('lvltitle').textContent='Nivel '+L.n+' · '+L.note;
+  elList.innerHTML='';
+  AREAS.filter(function(a){return a.l===listLevel&&!a.v&&crMatch(a)}).sort(function(a,b){return parseFloat(a.id)-parseFloat(b.id)||(a.id<b.id?-1:1)}).forEach(function(a){
+    var r=document.createElement('div'); r.className='row'+(a===selected?' sel':''); r.tabIndex=0;
+    r.innerHTML='<span class="sw"></span><div class="t"><b></b><span class="n"></span></div>';
+    r.querySelector('.sw').style.background=a.c; r.querySelector('b').textContent=a.id; r.querySelector('.n').textContent=a.name;
+    var go=document.createElement('button'); go.className='go'; go.textContent='Entrar'; go.onclick=function(e){e.stopPropagation(); enter(a)}; r.appendChild(go);
+    r.onclick=function(){select(a,true)}; r.onkeydown=function(e){if(e.key==='Enter')select(a,true)};
+    elList.appendChild(r);
+  });
+}
+function select(a,fly){
+  selected=a; if(a){listLevel=a.l; if(focusLevel!==null)focusLevel=a.l}
+  applyStates(); buildLevels(); buildList(); showInfo(a);
+  if(a&&fly){var c=anchor(a); flyOrbit(c[0],floorOf(a),c[1],Math.max(45,Math.max(a.bb[2]-a.bb[0],a.bb[3]-a.bb[1])*1.4),0.9)}
+}
+function showInfo(a){
+  if(!a){elInfo.hidden=true;return}
+  var L=LEVELS[a.l]; elInfo.hidden=false;
+  elInfo.innerHTML='<div class="lab"></div><h2></h2><div class="meta"></div><div class="lab" style="margin-top:6px">Locales y equipos</div><ul></ul>';
+  elInfo.querySelector('.lab').textContent='Área '+a.id+' · Nivel '+L.n;
+  elInfo.querySelector('h2').textContent=a.name;
+  var dc=doorsIn(a); elInfo.querySelector('.meta').textContent=L.note+' · suelo +'+a.hp.toFixed(3)+' · '+a.m2+' m² · '+dc[0]+' puerta'+(dc[0]===1?'':'s')+(dc[1]?' ('+dc[1]+' corredera'+(dc[1]===1?'':'s')+')':'')+(cxCat(a)?' · Corrosión '+(cxCat(a)==='MIXTO'?'C3 + CX':cxCat(a)):'');
+  var xr=ROOMS.filter(function(r){return r.a===a}).map(function(r){return r.room+' — '+r.desc+(r.cr?' [Clean Room]':'')+(roomCat(r)?' ['+roomCat(r)+']':'')}); var ul=elInfo.querySelector('ul'); (xr.length?xr.concat(a.rooms):(a.rooms.length?a.rooms:['Sin locales numerados en el plano'])).forEach(function(t){var li=document.createElement('li'); li.textContent=t; ul.appendChild(li)});
+  var b=document.createElement('button'); b.className='btn'; b.textContent='Entrar y caminar'; b.onclick=function(){enter(a)}; elInfo.appendChild(b);
+}
+/* ---------- Caminar ---------- */
+function neighbors(a){
+  var out=[];
+  AREAS.forEach(function(b){
+    if(b===a||b.v||b.l!==a.l)return; var hits=0,over=false;
+    a.edges.forEach(function(e){
+      var L=Math.hypot(e[1][0]-e[0][0],e[1][1]-e[0][1]);
+      var n=Math.max(1,Math.round(L/1.5));
+      for(var i=0;i<=n;i++){var x=e[0][0]+(e[1][0]-e[0][0])*i/n,z=e[0][1]+(e[1][1]-e[0][1])*i/n;
+        if(b.rings.some(function(r){return pip(x,z,r)||ringDist(x,z,r)<1.2}))hits++}
+    });
+    if(hits>=2)out.push(b);
+  });
+  return out.sort(function(p,q){return parseFloat(p.id)-parseFloat(q.id)}).slice(0,10);
+}
+function spawnIn(b,fx,fz){
+  var best=null,bd=1e9; gridPts(b).forEach(function(p){var d=Math.hypot(p[0]-fx,p[1]-fz); if(d<bd){bd=d;best=p}}); return best;
+}
+
+function wallsOn(){return document.getElementById('tw').checked}
+function wallDist(l,x,z){var d=WD[l],best=1e9,nx=0,nz=0; if(!d)return [best,0,0];
+  d.w.forEach(function(s){var ax=s[0],az=s[1],bx=s[2]-ax,bz=s[3]-az,L2=bx*bx+bz*bz,t=L2?Math.max(0,Math.min(1,((x-ax)*bx+(z-az)*bz)/L2)):0,px=ax+t*bx,pz=az+t*bz,dd=Math.hypot(x-px,z-pz); if(dd<best){best=dd;nx=x-px;nz=z-pz}});
+  return [best,nx,nz]}
+function pushOut(l,x,z){ if(!wallsOn())return [x,z]; var R=0.4;
+  for(var k=0;k<3;k++){var w=wallDist(l,x,z); if(w[0]>=R)break; var n=Math.hypot(w[1],w[2])||1; x+=w[1]/n*(R-w[0]); z+=w[2]/n*(R-w[0])}
+  return [x,z]}
+function freeSpawn(a,sp){ if(!wallsOn()||wallDist(a.l,sp[0],sp[1])[0]>=0.5)return sp;
+  var best=null,bs=-1e9; gridPts(a).forEach(function(q){var w=wallDist(a.l,q[0],q[1])[0]; if(w<0.6)return; var sc=-Math.hypot(q[0]-sp[0],q[1]-sp[1]); if(sc>bs){bs=sc;best=q}}); return best||sp}
+function bestYaw(l,x,z){var d=WD[l]; if(!d||!wallsOn())return 0; var by=0,bd=-1;
+  for(var k=0;k<24;k++){var y=k/24*Math.PI*2,dx=-Math.sin(y),dz=-Math.cos(y),m=40;
+    d.w.forEach(function(s){var ex=s[2]-s[0],ez=s[3]-s[1],den=dx*ez-dz*ex; if(Math.abs(den)<1e-9)return; var t=((s[0]-x)*ez-(s[1]-z)*ex)/den,u=((s[0]-x)*dz-(s[1]-z)*dx)/den; if(t>0&&u>=0&&u<=1&&t<m)m=t});
+    if(m>bd+0.01){bd=m;by=y}}
+  return by}
+function enter(a,fromPos){
+  var wasWalk=(mode==='walk'), sp=fromPos?spawnIn(a,fromPos[0],fromPos[1]):anchor(a);
+  sp=freeSpawn(a,sp); walkArea=a; wx=sp[0]; wz=sp[1]; if(!wasWalk){yaw=bestYaw(a.l,wx,wz);pitch=0}
+  mode='walk'; selected=a; document.body.classList.add('walk');
+  applyStates(); buildWalkUI(); resize();
+  flyTo(walkPose(),wasWalk?0.5:1.1,null);
+}
+function exitWalk(){
+  if(mode!=='walk')return;
+  var a=walkArea,c=[wx,wz];
+  mode='orbit'; document.body.classList.remove('walk'); walkArea=null;
+  focusLevel=a.l; listLevel=a.l; applyStates(); buildLevels(); buildList(); showInfo(a); resize();
+  target.set(c[0],floorOf(a),c[1]); radius=55; theta=-0.4; phi=1.0; flyTo(orbitPose(),1.0);
+}
+var elNb=document.getElementById('nb');
+function buildWalkUI(){
+  var a=walkArea;
+  document.getElementById('hudname').textContent='Área '+a.id+' · '+a.name;
+  document.getElementById('hudsub').textContent='Nivel '+a.l+' · '+LEVELS[a.l].note+' · suelo +'+a.hp.toFixed(3);
+  elNb.innerHTML=''; var nb=neighbors(a);
+  if(nb.length){var l=document.createElement('span'); l.className='lab'; l.style.margin='0 4px 0 0'; l.textContent='Pasar a'; elNb.appendChild(l)}
+  nb.forEach(function(b){var c=document.createElement('button'); c.className='chip'; c.textContent=b.id; c.title=b.name; c.style.borderLeft='6px solid '+b.c; c.onclick=function(){enter(b,[wx,wz])}; elNb.appendChild(c)});
+  document.getElementById('up').disabled=!stairTo(a,1); document.getElementById('down').disabled=!stairTo(a,-1);
+}
+var VLINK={'10|10.02':'11|11.01','10|10.01':'11|11.02','11|11.01':'10|10.02','11|11.02':'10|10.01'};
+function vlink(a,dir){var k=VLINK[a.l+'|'+a.id]; if(!k)return null; var p=k.split('|'); if(+p[0]!==a.l+dir)return null; return AREAS.filter(function(b){return b.l===+p[0]&&b.id===p[1]})[0]||null}
+function stairTo(a,dir){return vlink(a,dir)||trunkAt(a.l+dir)}
+function trunkAt(l){return AREAS.filter(function(a){return a.l===l&&a.tr})[0]||null}
+document.getElementById('up').onclick=function(){var t=stairTo(walkArea,1); if(t)enter(t,vlink(walkArea,1)?[wx,wz]:null)};
+document.getElementById('down').onclick=function(){var t=stairTo(walkArea,-1); if(t)enter(t,vlink(walkArea,-1)?[wx,wz]:null)};
+document.getElementById('exit').onclick=exitWalk;
+document.getElementById('ex').addEventListener('input',function(e){explode=parseFloat(e.target.value); applyStates(); if(mode==='orbit'&&!flight)target.y=(focusLevel!==null?LEVELS[focusLevel].elev-21.55+focusLevel*explode:12+explode*5)});
+/* ---------- Minimapa ---------- */
+var mc=document.getElementById('mc'), mctx=mc.getContext('2d');
+function drawMini(){
+  if(mode!=='walk'||!walkArea)return;
+  var W=mc.width,H=mc.height,bx=[1e9,1e9,-1e9,-1e9];
+  AREAS.forEach(function(a){if(a.l===walkArea.l&&!a.v){bx[0]=Math.min(bx[0],a.bb[0]);bx[1]=Math.min(bx[1],a.bb[1]);bx[2]=Math.max(bx[2],a.bb[2]);bx[3]=Math.max(bx[3],a.bb[3])}});
+  bx[0]-=3;bx[1]-=3;bx[2]+=3;bx[3]+=3; var s=Math.min(W/(bx[2]-bx[0]),H/(bx[3]-bx[1])), ox=(W-(bx[2]-bx[0])*s)/2, oz=(H-(bx[3]-bx[1])*s)/2;
+  var cs=getComputedStyle(document.documentElement); mctx.clearRect(0,0,W,H);
+  function X(m){return ox+(m-bx[0])*s} function Y(m){return oz+(m-bx[1])*s}
+  AREAS.forEach(function(a){ if(a.l!==walkArea.l)return;
+    a.rings.forEach(function(r){
+      mctx.beginPath(); r.forEach(function(p,i){if(i)mctx.lineTo(X(p[0]),Y(p[1]));else mctx.moveTo(X(p[0]),Y(p[1]))}); mctx.closePath();
+      mctx.globalAlpha=a.v?0.18:(a===walkArea?1:0.55); mctx.fillStyle=a.c; mctx.fill();
+      mctx.globalAlpha=1; mctx.lineWidth=a===walkArea?3:1; mctx.strokeStyle=a===walkArea?cs.getPropertyValue('--ink').trim():cs.getPropertyValue('--line').trim(); mctx.stroke();
+    });
+  });
+  mctx.fillStyle=cs.getPropertyValue('--ink').trim(); mctx.font='bold 22px sans-serif'; mctx.fillText('N ↑',10,26);
+  var px=X(wx),py=Y(wz);
+  mctx.save(); mctx.translate(px,py); mctx.rotate(-yaw);
+  mctx.fillStyle='rgba(255,255,255,.4)'; mctx.beginPath(); mctx.moveTo(0,0); mctx.arc(0,0,44,-Math.PI/2-0.45,-Math.PI/2+0.45); mctx.closePath(); mctx.fill();
+  mctx.fillStyle='#e4572e'; mctx.beginPath(); mctx.arc(0,0,7,0,7); mctx.fill(); mctx.lineWidth=2; mctx.strokeStyle='#fff'; mctx.stroke(); mctx.restore();
+}
+/* ---------- Entrada ---------- */
+var ptrs={}, down=null, lastPinch=0;
+var ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+function pickables(){
+  if(mode!=='orbit')return [];
+  var o=[]; AREAS.forEach(function(a){if(a.v||!a.floors)return; if(focusLevel!==null&&a.l!==focusLevel)return; a.floors.forEach(function(f){o.push(f)})}); return o;
+}
+function pick(e){
+  var r=cv.getBoundingClientRect(); mouse.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(mouse,camera); var h=ray.intersectObjects(pickables(),false); return h.length?h[0].object.userData.area:null;
+}
+cv.addEventListener('contextmenu',function(e){e.preventDefault()});
+cv.addEventListener('pointerdown',function(e){
+  cv.focus(); try{cv.setPointerCapture(e.pointerId)}catch(x){}
+  ptrs[e.pointerId]={x:e.clientX,y:e.clientY}; down={x:e.clientX,y:e.clientY,b:e.button,moved:0,shift:e.shiftKey};
+  if(Object.keys(ptrs).length===2){var k=Object.keys(ptrs); lastPinch=Math.hypot(ptrs[k[0]].x-ptrs[k[1]].x,ptrs[k[0]].y-ptrs[k[1]].y)}
+});
+cv.addEventListener('pointermove',function(e){
+  var p=ptrs[e.pointerId], tip=document.getElementById('tip');
+  if(!p){
+    if(mode==='orbit'&&!flight){var a=pick(e); if(a!==hovered){hovered=a;applyStates()}
+      if(a){tip.style.display='block';var sr=stage.getBoundingClientRect();tip.style.left=(e.clientX-sr.left+14)+'px';tip.style.top=(e.clientY-sr.top+14)+'px';tip.textContent=a.id+' · '+a.name;cv.style.cursor='pointer'}else{tip.style.display='none';cv.style.cursor='grab'}}
+    return;
+  }
+  var dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+  if(down)down.moved+=Math.abs(dx)+Math.abs(dy);
+  if(flight)return;
+  var n=Object.keys(ptrs).length;
+  if(mode==='walk'){yaw-=dx*0.0045; pitch=Math.max(-1.3,Math.min(1.3,pitch-dy*0.0045)); return}
+  if(n===2){var k=Object.keys(ptrs),d=Math.hypot(ptrs[k[0]].x-ptrs[k[1]].x,ptrs[k[0]].y-ptrs[k[1]].y); radius=Math.max(12,Math.min(420,radius*(lastPinch/d))); lastPinch=d; var rr=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0), uu=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1), kk=radius*0.0008; target.addScaledVector(rr,-dx*kk); target.addScaledVector(uu,dy*kk); return}
+  if(down&&(down.b===2||down.shift||down.b===1)){
+    var right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0), up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1), k2=radius*0.0016;
+    target.addScaledVector(right,-dx*k2); target.addScaledVector(up,dy*k2);
+  } else {theta-=dx*0.006; phi=Math.max(0.12,Math.min(1.5,phi-dy*0.006))}
+});
+function up(e){
+  var wasClick=down&&down.moved<6&&down.b===0&&Object.keys(ptrs).length===1;
+  delete ptrs[e.pointerId];
+  if(wasClick&&mode==='orbit'&&!flight){select(pick(e),false)}
+  if(!Object.keys(ptrs).length)down=null;
+}
+cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+cv.addEventListener('wheel',function(e){e.preventDefault(); if(mode==='orbit')radius=Math.max(12,Math.min(420,radius*(1+Math.sign(e.deltaY)*0.1)))},{passive:false});
+window.addEventListener('keydown',function(e){
+  if(e.code==='Escape'){exitWalk();return}
+  if(mode!=='walk')return; if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].indexOf(e.code)>=0)e.preventDefault(); keys[e.code]=true;
+});
+window.addEventListener('keyup',function(e){keys[e.code]=false});
+Array.prototype.forEach.call(document.querySelectorAll('#pad button'),function(b){
+  var k=b.getAttribute('data-k');
+  b.addEventListener('pointerdown',function(e){e.preventDefault(); keys[k]=true; try{b.setPointerCapture(e.pointerId)}catch(x){}});
+  ['pointerup','pointercancel','lostpointercapture'].forEach(function(t){b.addEventListener(t,function(){keys[k]=false})});
+});
+/* ---------- Bucle ---------- */
+function resize(){var w=stage.clientWidth,h=stage.clientHeight; if(!w||!h)return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix()}
+new ResizeObserver(resize).observe(stage);
+var last=performance.now(), miniT=0;
+function frame(now){
+  var dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(flight){
+    flight.t+=dt/flight.dur; var t=Math.min(1,flight.t), e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    camera.position.lerpVectors(flight.p0,flight.p1,e); camera.quaternion.copy(flight.q0).slerp(flight.q1,e);
+    if(t>=1){var d=flight.done; flight=null; if(d)d()}
+  } else if(mode==='walk'){
+    var sp=(keys.ShiftLeft||keys.ShiftRight)?6:3, f=0,s=0;
+    if(keys.KeyW||keys.ArrowUp)f+=1; if(keys.KeyS||keys.ArrowDown)f-=1; if(keys.KeyD)s+=1; if(keys.KeyA)s-=1;
+    if(keys.ArrowLeft)yaw+=1.6*dt; if(keys.ArrowRight)yaw-=1.6*dt;
+    if(f||s){
+      var fx=-Math.sin(yaw),fz=-Math.cos(yaw),rx=Math.cos(yaw),rz=-Math.sin(yaw);
+      var nx=wx+(fx*f+rx*s)*sp*dt, nz=wz+(fz*f+rz*s)*sp*dt;
+      var po=pushOut(walkArea.l,nx,nz); nx=po[0]; nz=po[1];
+      if(inA(walkArea,nx,nz,0.35)){wx=nx;wz=nz} else if(inA(walkArea,nx,wz,0.35)){wx=nx} else if(inA(walkArea,wx,nz,0.35)){wz=nz}
+    }
+    var p=walkPose(); camera.position.copy(p.p); camera.quaternion.copy(p.q);
+    miniT+=dt; if(miniT>0.05){miniT=0; drawMini()}
+  } else {var o=orbitPose(); camera.position.copy(o.p); camera.quaternion.copy(o.q)}
+  updCompass(); renderer.render(scene,camera); requestAnimationFrame(frame);
+}
+buildLevels(); buildList(); applyStates(); resize();
+var o0=orbitPose(); camera.position.copy(o0.p); camera.quaternion.copy(o0.q);
+/* ---------- Enlace profundo (Excel → visor): #nivel=3 · #area=3.01 · #room=CLSL01 ---------- */
+function deepParams(){var o={}; [String(location.hash||'').replace(/^#\??/,''),String(location.search||'').replace(/^\?/,''),String(window.name||'')].forEach(function(t){t.split(/[&;]/).forEach(function(kv){var i=kv.indexOf('='); if(i>0){var k=kv.slice(0,i).toLowerCase(),v=decodeURIComponent(kv.slice(i+1).replace(/\+/g,' ')); if(!(k in o))o[k]=v}})}); return o}
+function applyDeepLink(){
+  var q=deepParams(), a=null;
+  if(q.room){var r=ROOMS.filter(function(x){return x.room.toLowerCase()===q.room.toLowerCase()})[0]; if(r&&r.a)a=r.a}
+  if(!a&&q.area){var id=q.area.replace(/^A/i,''),m=id.match(/^(\d+)\.(\d+)$/); if(m){var l=+m[1]; a=AREAS.filter(function(b){return !b.v&&b.id===l+'.'+m[2]&&(b.l===l||(b.l===10&&l===6))})[0]||AREAS.filter(function(b){return !b.v&&b.id===id})[0]||null}}
+  if(a){if(mode==='walk')exitWalk(); focusLevel=a.l; select(a,true); return true}
+  if(q.nivel!==undefined&&q.nivel!==''){
+    var n=parseInt(q.nivel,10); if(mode==='walk')exitWalk();
+    if(isNaN(n)||n<0||n>=LEVELS.length){focusLevel=null; applyStates(); buildLevels(); buildList(); flyOrbit(28,12+explode*5,-14,190)}
+    else{var L=LEVELS[n]; focusLevel=n; listLevel=n; applyStates(); buildLevels(); buildList(); flyOrbit(28,L.elev-21.55+n*explode,-14,105)}
+    return true}
+  return false}
+document.getElementById('ptog').onclick=function(){document.body.classList.toggle('pcol'); try{resize()}catch(e){}};
+(function(){var f=document.getElementById('fs'); if(!document.fullscreenEnabled){f.style.display='none';return}
+  f.onclick=function(){try{if(document.fullscreenElement)document.exitFullscreen(); else document.documentElement.requestFullscreen()}catch(e){}}})();
+window.addEventListener('hashchange',applyDeepLink);
+setTimeout(applyDeepLink,60);
+window.__d4={deep:applyDeepLink,view:function(x,y,z,r,ph,th){target.set(x,y,z);radius=r;phi=ph;theta=th;flight=null},areas:AREAS,enter:enter,freeSpawn:freeSpawn,anchor:anchor,wallDist:wallDist,exit:exitWalk,select:select,camera:camera,mode:function(){return mode},pos:function(){return [wx,wz]},cur:function(){return walkArea},flightOn:function(){return !!flight}};
+requestAnimationFrame(frame);
+})();
+</script>
+<script>
+if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
+</script>
+</body>
+</html>
