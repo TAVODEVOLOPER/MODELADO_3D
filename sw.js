@@ -1,5 +1,5 @@
 /* Dolwin 4 · Service worker: funciona sin conexión tras la primera visita. Sube VERSION al publicar cambios. */
-const VERSION='dolwin4-v3';
+const VERSION='dolwin4-v5';
 const SHELL=['./', 'index.html', 'manifest.webmanifest', 'vendor/three.min.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon.svg', 'icons/favicon-32.png'];
 const PLANS=['assets/plans/L0.webp', 'assets/plans/L1.webp', 'assets/plans/L10.webp', 'assets/plans/L10d1.webp', 'assets/plans/L10d2.webp', 'assets/plans/L2.webp', 'assets/plans/L3.webp', 'assets/plans/L4.webp', 'assets/plans/L5.webp', 'assets/plans/L6.webp', 'assets/plans/L7.webp', 'assets/plans/L8.webp', 'assets/plans/L9.webp'];
 self.addEventListener('install',e=>{
